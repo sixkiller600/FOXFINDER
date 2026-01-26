@@ -15,7 +15,7 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.1.0"  # Added eBay ecosystem features (watchlist, explore, mobile app)
+__version__ = "2.3.0"  # Added eBay Money Back Guarantee promotion
 
 # Color scheme - professional dark theme
 COLORS = {
@@ -48,6 +48,56 @@ EBAY_DEALS = "https://www.ebay.com/deals"
 EBAY_TRENDING = "https://www.ebay.com/trending"
 EBAY_APP_IOS = "https://apps.apple.com/app/ebay/id282614216"
 EBAY_APP_ANDROID = "https://play.google.com/store/apps/details?id=com.ebay.mobile"
+
+# eBay official condition grading badges (shows eBay's trusted condition system)
+# Maps API condition values to display badges with appropriate styling
+CONDITION_BADGES = {
+    # eBay Certified Refurbished Program (premium tier)
+    'certified - refurbished': ('CERTIFIED REFURBISHED', '#0064d2', '#fff'),  # eBay blue
+    'certified refurbished': ('CERTIFIED REFURBISHED', '#0064d2', '#fff'),
+    # eBay Refurbished tiers
+    'excellent - refurbished': ('EXCELLENT REFURBISHED', '#0064d2', '#fff'),
+    'very good - refurbished': ('VERY GOOD REFURBISHED', '#0064d2', '#fff'),
+    'good - refurbished': ('GOOD REFURBISHED', '#0064d2', '#fff'),
+    # Standard conditions
+    'new': ('NEW', '#00a650', '#fff'),  # Green for new
+    'brand new': ('NEW', '#00a650', '#fff'),
+    'new with tags': ('NEW WITH TAGS', '#00a650', '#fff'),
+    'new without tags': ('NEW NO TAGS', '#00a650', '#fff'),
+    'new with box': ('NEW WITH BOX', '#00a650', '#fff'),
+    'new without box': ('NEW NO BOX', '#00a650', '#fff'),
+    'new other': ('NEW OTHER', '#4caf50', '#fff'),
+    'new other (see details)': ('NEW OTHER', '#4caf50', '#fff'),
+    # Used conditions
+    'like new': ('LIKE NEW', '#2196f3', '#fff'),  # Blue
+    'seller refurbished': ('SELLER REFURB', '#9c27b0', '#fff'),  # Purple
+    'manufacturer refurbished': ('MFR REFURB', '#9c27b0', '#fff'),
+    'very good': ('VERY GOOD', '#ff9800', '#000'),  # Orange
+    'good': ('GOOD', '#ff9800', '#000'),
+    'acceptable': ('ACCEPTABLE', '#795548', '#fff'),  # Brown
+    # Parts/repair
+    'for parts or not working': ('FOR PARTS', '#f44336', '#fff'),  # Red
+    'for parts': ('FOR PARTS', '#f44336', '#fff'),
+}
+
+
+def _get_condition_badge(condition):
+    """Generate HTML badge for eBay's official condition grading."""
+    if not condition:
+        return ""
+
+    condition_lower = str(condition).lower().strip()
+
+    # Look up in badge mapping
+    if condition_lower in CONDITION_BADGES:
+        label, bg_color, text_color = CONDITION_BADGES[condition_lower]
+    else:
+        # Default styling for unknown conditions - still show it
+        label = condition.upper()[:20]
+        bg_color = COLORS['text_gray']
+        text_color = '#fff'
+
+    return f'<span style="display: inline-block; padding: 2px 5px; margin-top: 3px; font-size: 9px; font-weight: bold; background: {bg_color}; color: {text_color}; border-radius: 2px; letter-spacing: 0.5px;">{html.escape(label)}</span>'
 
 
 def _extract_item_id(url):
@@ -97,6 +147,12 @@ def _build_email_wrapper(header_html, body_html, footer_text, border_color=None)
         <a href="{EBAY_APP_ANDROID}" style="color: {COLORS['text_light']}; text-decoration: none; font-size: 10px; margin-left: 10px;">Android App</a>
     </div>'''
 
+    # eBay Money Back Guarantee - promotes buyer confidence
+    guarantee_section = f'''
+    <div style="padding: 8px 15px; background: {COLORS['bg_row']}; border-top: 1px solid {COLORS['border']}; text-align: center;">
+        <a href="https://www.ebay.com/help/policies/ebay-money-back-guarantee-policy/ebay-money-back-guarantee?id=4210" style="color: {COLORS['text_gray']}; text-decoration: none; font-size: 10px;">Shop with confidence - eBay Money Back Guarantee</a>
+    </div>'''
+
     # eBay attribution footer (required for compliance)
     ebay_footer = f'''
     <div style="text-align: center; padding: 10px 15px; background: {COLORS['bg_row_alt']}; border-top: 1px solid {COLORS['border']};">
@@ -125,6 +181,7 @@ def _build_email_wrapper(header_html, body_html, footer_text, border_color=None)
     {body_html}
     {explore_section}
     {app_section}
+    {guarantee_section}
     {ebay_footer}
     <div style="background: {COLORS['bg_header']}; padding: 8px 15px; border-top: 1px solid {COLORS['border']};">
         <div style="color: {COLORS['text_dark']}; font-size: 9px;">{html.escape(footer_text)}</div>
@@ -236,7 +293,13 @@ def _build_listing_row(item, is_update=False):
     time_line = " | ".join(time_parts) if time_parts else ""
     location_line = f"[LOC] {location}" if location else ""
 
+    # Condition badge (eBay official grading)
+    condition = item.get('condition', '')
+    condition_badge = _get_condition_badge(condition)
+
     info_html = ""
+    if condition_badge:
+        info_html += f'<div style="margin-top: 3px;">{condition_badge}</div>'
     if time_line:
         info_html += f'<div style="font-size: 9px; color: {COLORS["text_cyan"]}; margin-top: 3px;">{html.escape(time_line)}</div>'
     if location_line:
