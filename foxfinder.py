@@ -375,7 +375,7 @@ def check_api_updates() -> None:
                 "",
                 "ACTION REQUIRED:",
                 "- Review eBay developer announcements",
-                "- Discuss with Claude if migration needed",
+                "- Check eBay migration guide if needed",
                 "- URL: https://developer.ebay.com/develop/apis",
                 "",
                 "=" * 60,
