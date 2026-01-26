@@ -1,0 +1,47 @@
+{
+    "_instructions": {
+        "setup": "Copy this file to ebay_config.json and fill in your credentials",
+        "api_credentials": {
+            "app_id": "Get from developer.ebay.com - this is your Client ID",
+            "client_secret": "Get from developer.ebay.com - keep this secret!",
+            "epn_campaign_id": "Optional: Get from partnernetwork.ebay.com (10-digit number)"
+        },
+        "email": {
+            "sender": "Your Gmail address",
+            "password": "Use a Gmail App Password (16 chars), NOT your regular password",
+            "recipient": "Where to send notifications"
+        },
+        "searches": "Add your search queries below. Copy a block to add more."
+    },
+    "api_credentials": {
+        "app_id": "YOUR_EBAY_APP_ID_HERE",
+        "client_secret": "YOUR_CLIENT_SECRET_HERE",
+        "epn_campaign_id": ""
+    },
+    "email": {
+        "sender": "your.email@gmail.com",
+        "password": "xxxx xxxx xxxx xxxx",
+        "recipient": "notify@example.com"
+    },
+    "check_interval_seconds": 120,
+    "recovery": {
+        "max_consecutive_failures": 5,
+        "backoff_seconds": 60,
+        "max_backoff_seconds": 300,
+        "alert_after_failures": 3
+    },
+    "searches": [
+        {
+            "name": "Example Search",
+            "query": "iPhone 15 Pro 256GB",
+            "min_price": 500,
+            "max_price": 800,
+            "exclude_words": ["broken", "parts", "repair"],
+            "required_words": ["256GB"],
+            "condition": "any",
+            "buy_it_now_only": false,
+            "free_shipping_only": false,
+            "enabled": true
+        }
+    ]
+}

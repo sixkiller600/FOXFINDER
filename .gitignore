@@ -1,0 +1,64 @@
+# FoxFinder .gitignore
+
+# Configuration with secrets (use template instead)
+ebay_config.json
+ebay_config.bak
+
+# Runtime state files
+ebay_token.json
+ebay_rate_limit.json
+ebay_seen_api.json
+.heartbeat
+.ebay.lock
+.shutdown_requested
+.last_api_update_check
+.email_failures
+API_UPDATE_NOTICE.txt
+
+# Logs
+*.log
+*.log.old
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+
+# Virtual environments
+venv/
+ENV/
+env/
+.venv/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# Backups
+config_backups/
+*.bak
