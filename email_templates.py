@@ -15,7 +15,14 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.5.0"  # eBay Growth Check: "CONDITION UNKNOWN" instead of "N/A" for clarity
+__version__ = "2.5.0"
+# v2.5.0: eBay Growth Check - "CONDITION UNKNOWN" instead of "N/A" for clarity
+# v2.4.0: eBay Growth Check - show condition badge when item is not new
+# v2.3.0: Add eBay ecosystem links (Today's Deals, Trending, Mobile App)
+# v2.2.0: Add watchlist deep links for one-click "Add to Watchlist"
+# v2.1.0: Add eBay Money Back Guarantee link
+# v2.0.0: Complete redesign with eBay-compliant branding
+# v1.0.0: Initial release with basic HTML templates
 
 # Color scheme - professional dark theme
 COLORS = {

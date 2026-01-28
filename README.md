@@ -210,6 +210,10 @@ To request higher API call limits (beyond 5,000/day):
 - Check that sender email matches the App Password account
 - Ensure "Less secure apps" is not the issue (use App Passwords instead)
 
+## Changelog
+
+See [CHANGELOG.md](CHANGELOG.md) for version history and release notes.
+
 ## License
 
 MIT License - See [LICENSE](LICENSE)
