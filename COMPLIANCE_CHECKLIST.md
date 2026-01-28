@@ -1,7 +1,7 @@
 # FoxFinder - eBay API Compliance Checklist
 
 **Application:** FoxFinder eBay Deal Notification Service
-**Version:** 1.1.0 (v4.8.0 code)
+**Version:** 1.2.0 (v4.9.0 code)
 **API Used:** eBay Browse API (Buy APIs)
 **Last Verified:** January 28, 2026
 **Audit Level:** Exhaustive (Section 8 & 9 full compliance + OWASP)
@@ -25,6 +25,9 @@
 | ✅ **FIXED_PRICE default** | PASS | Default filter for Buy It Now items (eBay requirement) |
 | ✅ **EPN Campaign ID validation** | PASS | Validates 10-digit format in config validation |
 | ✅ **Condition display** | PASS | Shows condition badge, indicates when unknown (eBay requirement) |
+| ✅ **contextualLocation header** | PASS | X-EBAY-C-ENDUSERCTX includes `contextualLocation=country=US` |
+| ✅ **itemEndDate check** | PASS | Skips listings with EndDate in the past (data freshness) |
+| ✅ **estimatedAvailabilityStatus check** | PASS | Skips unavailable items (best practice) |
 
 ### API Versions Used
 
@@ -44,6 +47,32 @@ FoxFinder uses `sort=newlyListed` in API calls. This is a **core business requir
 - **Documentation:** Explicitly documented in `search_ebay()` function comments
 
 This has been disclosed in the Growth Check application.
+
+### Price Drop Notification Feature - Compliance Clarification
+
+FoxFinder includes a price drop notification feature. This section clarifies why it is **fully compliant** with eBay API License Agreement Section 9 prohibitions:
+
+**What the feature does:**
+- Tracks price changes on items the individual user has **already encountered**
+- Notifies the user when a specific saved item's price drops into their search criteria
+- Stores only: item ID, last seen price, timestamp (14-day retention)
+
+**Why this is NOT "market research" or "price modeling" (prohibited):**
+
+| Prohibited Activity | FoxFinder Behavior | Status |
+|---------------------|-------------------|--------|
+| "Site-wide statistics" | Only processes user's configured searches | ✅ COMPLIANT |
+| "Aggregate pricing data" | NO aggregation - individual item tracking only | ✅ COMPLIANT |
+| "Price averaging or trending" | NO averaging or statistical analysis | ✅ COMPLIANT |
+| "Suggest or model prices" | Does NOT suggest prices to sellers or buyers | ✅ COMPLIANT |
+| "Category-wide analysis" | No category-level data collection | ✅ COMPLIANT |
+
+**Functional equivalence to eBay features:**
+This feature is functionally identical to eBay's own **Watchlist price drop alerts**:
+- eBay Watchlist: "We'll email you when the price drops" on watched items
+- FoxFinder: Notifies when a previously-seen item's price drops into range
+
+**Conclusion:** Price drop notifications are a standard e-commerce feature (Amazon, eBay, and others offer this). FoxFinder's implementation tracks individual items only, performs no aggregation or analysis, and does not model or suggest prices.
 
 ### Data Handling Requirements (Section 8)
 
@@ -70,7 +99,8 @@ This has been disclosed in the Growth Check application.
 
 | Requirement | Status | Implementation |
 |-------------|--------|----------------|
-| ✅ **X-EBAY-C-ENDUSERCTX header** | PASS | `foxfinder.py` line ~1060 - adds `affiliateCampaignId` |
+| ✅ **X-EBAY-C-ENDUSERCTX header** | PASS | Includes `affiliateCampaignId` AND `contextualLocation` |
+| ✅ **contextualLocation for shipping** | PASS | `contextualLocation=country=US` for delivery estimates |
 | ✅ **10-digit campaign ID support** | PASS | Config template includes `epn_campaign_id` field |
 | ✅ **Affiliate link generation** | PASS | Returns `itemAffiliateWebUrl` when EPN configured |
 
@@ -194,11 +224,20 @@ grep -n "max_retries" foxfinder.py
 # Verify data retention setting
 grep -n "SEEN_MAX_AGE_DAYS" foxfinder.py
 
-# Verify EPN header support
-grep -n "X-EBAY-C-ENDUSERCTX\|affiliateCampaignId" foxfinder.py
+# Verify EPN header support with contextualLocation
+grep -n "X-EBAY-C-ENDUSERCTX\|contextualLocation\|affiliateCampaignId" foxfinder.py
+
+# Verify itemEndDate check (data freshness)
+grep -n "itemEndDate" foxfinder.py
+
+# Verify estimatedAvailabilityStatus check
+grep -n "estimatedAvailabilityStatus" foxfinder.py
 
 # Verify eBay branding in emails
 grep -n "EBAY_ATTRIBUTION\|Powered by" email_templates.py
+
+# Verify condition display compliance
+grep -n "CONDITION UNKNOWN" email_templates.py
 
 # Verify Python syntax
 python -m py_compile foxfinder.py ebay_common.py email_templates.py
@@ -250,6 +289,10 @@ The following patterns were programmatically scanned for in the complete codebas
 | eBay attribution in emails | ✅ VERIFIED |
 | max_retries=2 enforcement | ✅ VERIFIED |
 | SEEN_MAX_AGE_DAYS=14 | ✅ VERIFIED |
+| contextualLocation header | ✅ VERIFIED |
+| itemEndDate expiration check | ✅ VERIFIED |
+| estimatedAvailabilityStatus check | ✅ VERIFIED |
+| Condition badge (UNKNOWN text) | ✅ VERIFIED |
 
 ---
 
