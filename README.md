@@ -31,8 +31,8 @@ FoxFinder is a personal deal notification application that uses the **official e
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/yourusername/foxfinder.git
-cd foxfinder
+git clone https://github.com/sixkiller600/FOXFINDER.git
+cd FOXFINDER
 ```
 
 ### 2. Install Dependencies

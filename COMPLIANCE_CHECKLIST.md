@@ -296,4 +296,4 @@ The following patterns were programmatically scanned for in the complete codebas
 
 ---
 
-*This checklist documents FoxFinder's compliance with eBay API License Agreement requirements as of January 26, 2026. Audit performed using automated pattern scanning and manual code review.*
+*This checklist documents FoxFinder's compliance with eBay API License Agreement requirements as of January 28, 2026. Audit performed using automated pattern scanning and manual code review.*
