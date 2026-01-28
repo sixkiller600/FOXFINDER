@@ -21,7 +21,7 @@ try:
 except ImportError:
     _HAS_DISK_CHECK = False
     def check_disk_space(path, min_mb=100):
-        return True, -1  # Fallback: assume OK
+        return True, -1
 
 # Try to import zoneinfo for system-maintained DST rules (Python 3.9+)
 try:
@@ -30,9 +30,7 @@ try:
 except ImportError:
     HAS_ZONEINFO = False
 
-# ---
-# VERSION INFO
-# ---
+# Version
 
 VERSION = "1.2.1"
 __version__ = VERSION
@@ -52,11 +50,9 @@ __version__ = VERSION
 # CHANGELOG v1.0.2:
 # - Atomic write pattern for update_heartbeat() (temp+rename)
 # - Atomic write pattern for save_rate_state() (temp+rename)
-# - Full Reliability compliance for crash safety
+# - Atomic writes for crash safety
 
-# ---
-# PATHS - Single source of truth
-# ---
+# Paths
 
 SCRIPT_DIR = Path(__file__).parent
 CONFIG_FILE = SCRIPT_DIR / "ebay_config.json"
@@ -75,9 +71,7 @@ API_UPDATE_ALERT_FILE = SCRIPT_DIR / "API_UPDATE_NOTICE.txt"
 # Email failure tracking
 EMAIL_FAILURES_FILE = SCRIPT_DIR / ".email_failures"
 
-# ---
-# CONSTANTS
-# ---
+# Constants
 
 # eBay API
 EBAY_API_BASE = "https://api.ebay.com"
@@ -90,9 +84,7 @@ MIN_INTERVAL_SECONDS = 30
 # Log rotation
 LOG_MAX_SIZE_MB = 10
 
-# ---
-# LOGGING
-# ---
+# Logging
 
 def log(message: str, log_file: Path = None, verbose: bool = True) -> None:
     """
@@ -114,7 +106,7 @@ def log(message: str, log_file: Path = None, verbose: bool = True) -> None:
         with open(log_file, "a", encoding="utf-8") as f:
             f.write(line + "\n")
     except (IOError, OSError):
-        pass  # Log write failure is non-critical
+        pass
 
     # Print to console
     if verbose:
@@ -125,7 +117,7 @@ def log(message: str, log_file: Path = None, verbose: bool = True) -> None:
                 safe_line = line.encode('ascii', errors='replace').decode('ascii')
                 print(safe_line, flush=True)
             except (UnicodeEncodeError, OSError):
-                pass  # Console output failure is non-critical
+                pass
 
 
 def rotate_logs() -> bool:
@@ -144,13 +136,11 @@ def rotate_logs() -> bool:
             log("Active log rotated (exceeded size limit)")
             return True
     except (IOError, OSError):
-        pass  # Log rotation failure is non-critical
+        pass
     return False
 
 
-# ---
-# HEARTBEAT MANAGEMENT
-# ---
+# Heartbeat
 
 def update_heartbeat(source: str = "foxfinder", version: str = VERSION) -> None:
     """
@@ -188,9 +178,7 @@ def read_heartbeat() -> Optional[Dict[str, Any]]:
     return None
 
 
-# ---
-# SHUTDOWN SIGNAL MANAGEMENT
-# ---
+# Shutdown
 
 def is_shutdown_requested() -> bool:
     """Check if graceful shutdown has been requested."""
@@ -225,7 +213,7 @@ def clear_shutdown_request() -> bool:
             log("Cleared shutdown signal")
             return True
     except (IOError, OSError):
-        pass  # File deletion failure is non-critical
+        pass
     return False
 
 
@@ -270,9 +258,7 @@ def interruptible_wait(
     return False, False  # Timeout, not interrupted
 
 
-# ---
-# RATE LIMIT STATE MANAGEMENT
-# ---
+# Rate Limiting
 
 def _get_nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> int:
     """
@@ -306,7 +292,6 @@ def is_us_pacific_dst(dt_utc: datetime) -> bool:
     Returns:
         True if DST is in effect, False otherwise
     """
-    # Ensure dt_utc has UTC timezone (defensive - required for comparisons)
     if dt_utc.tzinfo is None:
         dt_utc = dt_utc.replace(tzinfo=timezone.utc)
 
@@ -322,7 +307,7 @@ def is_us_pacific_dst(dt_utc: datetime) -> bool:
         except Exception:
             pass  # Fall through to hardcoded logic
 
-    # Fallback: Hardcoded rules (US Energy Policy Act of 2005)
+    # Hardcoded rules for Python <3.9
     year = dt_utc.year
     month = dt_utc.month
 
@@ -404,7 +389,6 @@ def is_israel_dst(dt_utc: datetime) -> bool:
     Returns:
         True if DST is in effect (IDT, UTC+3), False otherwise (IST, UTC+2)
     """
-    # Ensure dt_utc has UTC timezone (defensive - required for comparisons)
     if dt_utc.tzinfo is None:
         dt_utc = dt_utc.replace(tzinfo=timezone.utc)
 
@@ -420,7 +404,7 @@ def is_israel_dst(dt_utc: datetime) -> bool:
         except Exception:
             pass  # Fall through to hardcoded logic
 
-    # Fallback: Hardcoded rules (Israeli government calendar)
+    # Hardcoded rules for Python <3.9
     year = dt_utc.year
     month = dt_utc.month
 
@@ -499,7 +483,7 @@ def load_rate_state() -> Dict[str, Any]:
         try:
             with open(RATE_FILE, "r", encoding="utf-8") as f:
                 data = json.load(f)
-            # Migration: ensure new fields exist
+            # Add missing fields from older versions
             if "reset_time_utc" not in data:
                 data["reset_time_utc"] = None
             if "last_api_check" not in data:
@@ -526,7 +510,7 @@ def save_rate_state(rate_data: Dict[str, Any]) -> bool:
     Returns:
         True if saved successfully, False otherwise
     """
-    # Reliability: Check disk space before write
+    # Check disk space
     has_space, free_mb = check_disk_space(RATE_FILE)
     if not has_space:
         log(f"WARNING: Low disk space ({free_mb}MB) - skipping rate state save")
@@ -545,7 +529,7 @@ def save_rate_state(rate_data: Dict[str, Any]) -> bool:
                 time.sleep(0.5)
             else:
                 log(f"ERROR saving rate state after 3 attempts: {e}")
-                # Clean up temp file on final failure
+                # Remove temp file
                 try:
                     if tmp_file.exists():
                         tmp_file.unlink()
@@ -576,7 +560,7 @@ def get_seconds_until_reset(rate_data: Dict[str, Any]) -> int:
         except (ValueError, TypeError) as e:
             log(f"Error parsing reset time: {e}")
 
-    # Fallback: calculate time until midnight Pacific
+    # Calculate time until midnight Pacific
     utc_now = datetime.now(timezone.utc)
     is_dst = is_us_pacific_dst(utc_now)
     reset_hour_utc = 7 if is_dst else 8
@@ -729,9 +713,7 @@ def should_force_api_refresh(rate_data: Dict[str, Any]) -> Tuple[bool, str]:
     return False, ""
 
 
-# ---
-# CONFIG MANAGEMENT
-# ---
+# Config
 
 _cached_config: Optional[Dict[str, Any]] = None
 
@@ -761,14 +743,14 @@ def backup_config_daily() -> None:
                 old_backup.unlink()
                 log(f"Removed old backup: {old_backup.name}")
     except Exception as e:
-        log(f"Config backup failed (non-fatal): {e}")
+        log(f"Config backup failed: {e}")
 
 
 def load_config() -> Dict[str, Any]:
     """Load config with fallback to last known good config."""
     global _cached_config
     try:
-        backup_config_daily()  # Reliability: Backup before load
+        backup_config_daily()
         with open(CONFIG_FILE, 'r', encoding='utf-8-sig') as f:
             config = json.load(f)
         _cached_config = config  # Cache successful load
@@ -781,9 +763,7 @@ def load_config() -> Dict[str, Any]:
         return {}
 
 
-# ---
-# CONNECTIVITY CHECK
-# ---
+# Connectivity
 
 def check_internet() -> bool:
     """Connectivity check using eBay API endpoint."""
@@ -797,9 +777,7 @@ def check_internet() -> bool:
         return False
 
 
-# ---
-# SMTP CONFIGURATION
-# ---
+# SMTP
 
 def get_smtp_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -833,9 +811,7 @@ def get_smtp_config(config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-# ---
-# MODULE INFO
-# ---
+# Module Info
 
 def get_module_info() -> Dict[str, Any]:
     """Get info about this module."""

@@ -26,13 +26,12 @@ def check_disk_space(path: Path, min_mb: int = MIN_DISK_SPACE_MB) -> Tuple[bool,
         # Get the directory to check (parent if path is a file)
         check_path = path.parent if path.is_file() or not path.exists() else path
         if not check_path.exists():
-            check_path = Path(path.anchor)  # Fallback to drive root
+            check_path = Path(path.anchor)
 
         usage = shutil.disk_usage(check_path)
         free_mb = usage.free // (1024 * 1024)
         return free_mb >= min_mb, free_mb
     except (OSError, AttributeError):
-        # If we can't check, assume OK (fail-open for non-critical check)
         return True, -1
 
 # --- Interruptible Operations ---
@@ -75,9 +74,7 @@ def interruptible_wait(
     return False, False  # Timeout, not interrupted
 
 
-# ---
-# HEARTBEAT MANAGEMENT
-# ---
+# Heartbeat
 
 def update_heartbeat(
     heartbeat_file: Path,
@@ -153,7 +150,7 @@ def get_heartbeat_age_seconds(heartbeat_file: Path) -> int:
         data = read_heartbeat(heartbeat_file)
         if data and 'timestamp' in data:
             return int(time.time() - data['timestamp'])
-        # Fallback to file mtime if no timestamp in content
+        # Use file mtime if no timestamp in content
         if heartbeat_file.exists():
             return int(time.time() - heartbeat_file.stat().st_mtime)
     except Exception:
@@ -161,9 +158,7 @@ def get_heartbeat_age_seconds(heartbeat_file: Path) -> int:
     return -1
 
 
-# ---
-# LOG ROTATION
-# ---
+# Log Rotation
 
 def rotate_log_if_needed(log_file: Path, max_size_bytes: int = 5 * 1024 * 1024) -> bool:
     """
@@ -190,9 +185,7 @@ def rotate_log_if_needed(log_file: Path, max_size_bytes: int = 5 * 1024 * 1024) 
     return False
 
 
-# ---
-# SHUTDOWN FILE MANAGEMENT
-# ---
+# Shutdown
 
 def check_shutdown_file(shutdown_file: Path) -> bool:
     """
@@ -242,9 +235,7 @@ def request_shutdown(shutdown_file: Path) -> bool:
         return False
 
 
-# ---
-# UTILITY FUNCTIONS
-# ---
+# Utilities
 
 def format_duration(seconds: int) -> str:
     """
@@ -301,7 +292,7 @@ def safe_json_save(file_path: Path, data: dict, indent: int = 2) -> bool:
         temp_file.replace(file_path)
         return True
     except Exception:
-        # Clean up temp file if it exists
+        # Remove temp file
         try:
             temp_file = file_path.with_suffix('.tmp')
             if temp_file.exists():

@@ -34,7 +34,7 @@ __version__ = VERSION
 #         - Document newlyListed sort as business requirement
 # v4.7.5: Fix missing UTF-8 encoding in token file I/O for consistency
 # v4.7.4: Reliability quick wins - dynamic reset wait, HTTP 429/503 retry, validation check, email visibility
-# v4.7.1: CRITICAL FIX - get_minutes_since_reset() call signature + defensive try-except
+# v4.7.1: CRITICAL FIX - get_minutes_since_reset() call signature
 # v4.7.0: Post-reset anomaly detection (Proactive Retry) to fix 1h hangs after API sync lag
 # v4.6.8: Add requests.Session for connection pooling (2-3x faster API checks)
 # v4.6.7: Increase search results limit 50→150 to reduce staggered alerts after downtime
@@ -325,7 +325,7 @@ def check_api_updates() -> None:
                     send_email_core(config, subject, body, is_html=True)
                     log("API deprecation email alert sent")
             except Exception as e:
-                log(f"Failed to send API notice email (non-critical): {e}")
+                log(f"Failed to send API notice email: {e}")
         else:
             if API_UPDATE_ALERT_FILE.exists():
                 API_UPDATE_ALERT_FILE.unlink()
@@ -334,7 +334,7 @@ def check_api_updates() -> None:
             else:
                 log("API check incomplete - will retry next cycle")
     except Exception as e:
-        log(f"API check error (non-critical): {e}")
+        log(f"API check error: {e}")
 
 
 STALE_LOCK_AGE_SECONDS = 3600
@@ -405,7 +405,7 @@ def update_run_log(increment_alerts: bool = False) -> None:
             json.dump(config, f, indent=4)
         tmp_file.replace(CONFIG_FILE)
     except (IOError, json.JSONDecodeError, OSError) as e:
-        log(f"Run log update failed (non-critical): {e}")
+        log(f"Run log update failed: {e}")
         try:
             if tmp_file.exists():
                 tmp_file.unlink()
@@ -1372,7 +1372,7 @@ def run_foxfinder() -> None:
                     log("Ignoring smart pacing (1h+). Forcing rapid retry (120s) to catch quota reset.")
                     final_wait = 120
             except Exception as e:
-                log(f"Anomaly detection skipped (non-critical): {e}")
+                log(f"Anomaly detection skipped: {e}")
             update_heartbeat()
             cycle_start_time = time.time()
             all_new = []
