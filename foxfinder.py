@@ -44,7 +44,7 @@ __version__ = VERSION
 # v4.6.2: Fix HTML email rendering - add UTF-8 charset to MIMEText
 # v4.6.1: Robustness hardening - timeout constants, temp cleanup, specific exceptions
 # v4.6.0: Price drop tracking - alerts when seen items drop into search criteria
-# v4.5.0: NASA reliability hardening - HTTP retry, token retry, API validation, memory cap
+# v4.5.0: Reliability hardening - HTTP retry, token retry, API validation, memory cap
 # v4.4.0: Robust rate limit sync - post-reset retry, sanity validation, auto-recovery
 
 # =============================================================================

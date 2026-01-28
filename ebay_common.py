@@ -3,7 +3,7 @@
 FoxFinder - eBay Common Module
 ==============================
 
-NASA JPL Level Reliability - Shared between:
+Reliability Level Reliability - Shared between:
 - foxfinder.py (automated deal notification)
 - Status dashboard scripts
 
@@ -23,7 +23,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, Tuple
 
-# NASA JPL: Import disk space check from shared utilities (same directory)
+# Reliability: Import disk space check from shared utilities (same directory)
 try:
     from shared_utils import check_disk_space
     _HAS_DISK_CHECK = True
@@ -61,7 +61,7 @@ __version__ = VERSION
 # CHANGELOG v1.0.2:
 # - Atomic write pattern for update_heartbeat() (temp+rename)
 # - Atomic write pattern for save_rate_state() (temp+rename)
-# - Full NASA JPL compliance for crash safety
+# - Full Reliability compliance for crash safety
 
 # =============================================================================
 # PATHS - Single source of truth
@@ -239,12 +239,12 @@ def clear_shutdown_request() -> bool:
 
 
 # =============================================================================
-# INTERRUPTIBLE OPERATIONS - NASA JPL Pattern
+# INTERRUPTIBLE OPERATIONS - Reliability Pattern
 # =============================================================================
 
 def interruptible_sleep(seconds: float, check_interval: float = 1.0) -> bool:
     """
-    NASA JPL Pattern: Sleep that can be interrupted by shutdown signal.
+    Reliability Pattern: Sleep that can be interrupted by shutdown signal.
 
     Instead of blocking for the full duration, checks shutdown flag periodically.
     This allows graceful shutdown to work within check_interval seconds.
@@ -273,7 +273,7 @@ def interruptible_wait(
     description: str = "condition"
 ) -> Tuple[bool, bool]:
     """
-    NASA JPL Pattern: Wait for a condition with shutdown awareness.
+    Reliability Pattern: Wait for a condition with shutdown awareness.
 
     Args:
         condition_func: Callable that returns True when condition is met
@@ -554,7 +554,7 @@ def save_rate_state(rate_data: Dict[str, Any]) -> bool:
     Returns:
         True if saved successfully, False otherwise
     """
-    # NASA JPL: Check disk space before write
+    # Reliability: Check disk space before write
     has_space, free_mb = check_disk_space(RATE_FILE)
     if not has_space:
         log(f"WARNING: Low disk space ({free_mb}MB) - skipping rate state save")
@@ -796,7 +796,7 @@ def load_config() -> Dict[str, Any]:
     """Load config with fallback to last known good config."""
     global _cached_config
     try:
-        backup_config_daily()  # NASA JPL: Backup before load
+        backup_config_daily()  # Reliability: Backup before load
         with open(CONFIG_FILE, 'r', encoding='utf-8-sig') as f:
             config = json.load(f)
         _cached_config = config  # Cache successful load

@@ -2,7 +2,7 @@
 
 **Personal eBay Deal Notification Service using the Official Browse API**
 
-FoxFinder is a personal deal notification application that uses the **official eBay Browse API** to search for items matching your criteria and send email notifications when new deals appear. Built with eBay API compliance in mind and NASA JPL-inspired reliability patterns.
+FoxFinder is a personal deal notification application that uses the **official eBay Browse API** to search for items matching your criteria and send email notifications when new deals appear. Built with eBay API compliance in mind.
 
 > **Compliance Note:** FoxFinder is designed from the ground up to comply with the eBay API License Agreement, eBay Developer Program policies, and eBay Partner Network Terms. See [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md) for full details.
 
@@ -130,15 +130,15 @@ FoxFinder is designed to comply with eBay Developer Program requirements:
 
 | Requirement | Status |
 |-------------|--------|
-| Uses Browse API (not deprecated Finding API) | ✅ |
-| Max 2 retries for infrastructure errors | ✅ |
-| Graceful error handling | ✅ |
-| Data retention ≤14 days | ✅ |
-| Data freshness compliance (≤6 hours) | ✅ |
-| EPN affiliate tracking support | ✅ |
-| eBay attribution in notifications | ✅ |
-| Privacy policy included | ✅ |
-| No market research/AI training | ✅ |
+| Uses Browse API (not deprecated Finding API) | Yes |
+| Max 2 retries for infrastructure errors | Yes |
+| Graceful error handling | Yes |
+| Data retention ≤14 days | Yes |
+| Data freshness compliance (≤6 hours) | Yes |
+| EPN affiliate tracking support | Yes |
+| eBay attribution in notifications | Yes |
+| Privacy policy included | Yes |
+| No market research/AI training | Yes |
 
 **Full compliance details:** [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md)
 
@@ -222,7 +222,6 @@ MIT License - See [LICENSE](LICENSE)
 
 - eBay Developer Program for the Browse API
 - eBay Partner Network for affiliate integration
-- Built with reliability patterns inspired by NASA JPL
 
 ## Disclaimer
 

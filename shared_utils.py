@@ -1,7 +1,7 @@
 """
 FoxFinder - Shared Utilities Module
 ===================================
-NASA JPL Level Reliability - Shared patterns for:
+Reliability Level Reliability - Shared patterns for:
 - FoxFinder eBay Deal Notification Service (foxfinder.py)
 
 Maintains single source of truth for common functionality.
@@ -20,7 +20,7 @@ VERSION = "1.2.0"
 __version__ = VERSION
 
 # =============================================================================
-# DISK SPACE CHECK - NASA JPL Pattern
+# DISK SPACE CHECK - Reliability Pattern
 # =============================================================================
 
 # Minimum free disk space for safe writes (in MB)
@@ -29,7 +29,7 @@ MIN_DISK_SPACE_MB = 100
 
 def check_disk_space(path: Path, min_mb: int = MIN_DISK_SPACE_MB) -> Tuple[bool, int]:
     """
-    NASA JPL Pattern: Check disk space before critical writes.
+    Reliability Pattern: Check disk space before critical writes.
 
     Prevents silent data corruption when disk is full.
     Should be called before atomic write operations.
@@ -61,7 +61,7 @@ def check_disk_space(path: Path, min_mb: int = MIN_DISK_SPACE_MB) -> Tuple[bool,
         return True, -1
 
 # =============================================================================
-# NASA JPL INTERRUPTIBLE OPERATIONS
+# Reliability INTERRUPTIBLE OPERATIONS
 # =============================================================================
 
 def interruptible_sleep(
@@ -70,7 +70,7 @@ def interruptible_sleep(
     check_interval: float = 1.0
 ) -> bool:
     """
-    NASA JPL Pattern: Sleep that can be interrupted by shutdown signal.
+    Reliability Pattern: Sleep that can be interrupted by shutdown signal.
 
     Instead of blocking for the full duration, checks shutdown flag periodically.
     This allows graceful shutdown to work within check_interval seconds.
@@ -101,7 +101,7 @@ def interruptible_wait(
     description: str = "condition"
 ) -> Tuple[bool, bool]:
     """
-    NASA JPL Pattern: Wait for a condition with shutdown awareness.
+    Reliability Pattern: Wait for a condition with shutdown awareness.
 
     Args:
         condition_func: Callable that returns True when condition is met
@@ -349,7 +349,7 @@ def safe_json_save(file_path: Path, data: dict, indent: int = 2) -> bool:
     """
     Safely save dict to JSON file using atomic write pattern.
 
-    NASA JPL Pattern: Write to temp file, then rename (atomic on most filesystems).
+    Reliability Pattern: Write to temp file, then rename (atomic on most filesystems).
     Prevents data corruption if process interrupted mid-write.
 
     Args:

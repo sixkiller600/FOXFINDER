@@ -117,7 +117,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ## [4.5.0] - 2026-01-19
 
 ### Added
-- NASA reliability hardening
+- Reliability improvements
 - HTTP retry logic
 - Token retry logic
 - API validation
@@ -140,7 +140,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 | `foxfinder.py` | 4.9.0 | Main application |
 | `ebay_common.py` | 1.2.1 | Shared utilities |
 | `email_templates.py` | 2.5.0 | Email templates |
-| `shared_utils.py` | 1.2.0 | NASA JPL patterns |
+| `shared_utils.py` | 1.2.0 | Utility functions |
 
 ---
 
