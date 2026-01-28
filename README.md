@@ -164,30 +164,6 @@ foxfinder/
 └── Status Dashboard.bat      # View status and API usage
 ```
 
-## Upgrading API Limits (Application Growth Check)
-
-To request higher API call limits (beyond 5,000/day):
-
-### Prerequisites
-1. Join [eBay Partner Network](https://partnernetwork.ebay.com)
-2. Have a working application with EPN tracking enabled
-3. Review the [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md)
-
-### Application Process
-1. Go to [Application Growth Check](https://developer.ebay.com/grow/application-growth-check)
-2. Submit request with subject: "Buy API Production Access (YOUR_EBAY_USER_ID)"
-3. Include:
-   - Business model description
-   - EPN Campaign ID
-   - Estimated daily/hourly call volumes
-   - Reference to this compliance checklist
-
-### What eBay Reviews
-- API License Agreement compliance
-- Data handling practices
-- Rate limiting implementation
-- Error handling (max 2 retries)
-- Privacy policy
 
 ## Troubleshooting
 
@@ -203,7 +179,6 @@ To request higher API call limits (beyond 5,000/day):
 ### "Rate limit exceeded"
 - Wait for daily reset (midnight Pacific Time)
 - Reduce number of searches or increase check interval
-- Apply for Growth Check if you need more calls
 
 ### Emails not sending
 - Verify Gmail App Password is correct (16 characters, no spaces)
