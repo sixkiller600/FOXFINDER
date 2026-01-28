@@ -15,7 +15,7 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.3.0"  # Added eBay Money Back Guarantee promotion
+__version__ = "2.4.0"  # eBay Growth Check compliance: show condition when not new
 
 # Color scheme - professional dark theme
 COLORS = {
@@ -81,9 +81,22 @@ CONDITION_BADGES = {
 }
 
 
-def _get_condition_badge(condition):
-    """Generate HTML badge for eBay's official condition grading."""
+def _get_condition_badge(condition, show_if_unknown=True):
+    """
+    Generate HTML badge for eBay's official condition grading.
+
+    eBay Growth Check compliance: "Must indicate when the item is not new"
+    - If condition is known and not new, we display the badge
+    - If condition is unknown/missing, we show "CONDITION N/A" per compliance
+
+    Args:
+        condition: The condition string from eBay API
+        show_if_unknown: If True, show "CONDITION N/A" badge when condition missing
+    """
     if not condition:
+        if show_if_unknown:
+            # eBay compliance: indicate when condition is not specified
+            return f'<span style="display: inline-block; padding: 2px 5px; margin-top: 3px; font-size: 9px; font-weight: bold; background: {COLORS["text_dark"]}; color: #999; border-radius: 2px; letter-spacing: 0.5px;">CONDITION N/A</span>'
         return ""
 
     condition_lower = str(condition).lower().strip()

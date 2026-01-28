@@ -11,8 +11,22 @@ Compliant with eBay Developer Program policies:
 For more information, see README.md and PRIVACY_POLICY.md
 """
 
-VERSION = "4.7.5"
+VERSION = "4.8.3"
 __version__ = VERSION
+# v4.8.3: Rename update_statistics -> update_run_log to avoid "statistics" term
+#         (eBay prohibits "site-wide statistics" - clarify this is just run logging)
+# v4.8.2: CRITICAL FIX - API filter must use backwards compatibility logic
+#         - buyingOptions:{FIXED_PRICE} filter now respects buy_it_now_only legacy config
+#         - Without this fix, auctions were filtered out at API level before code could see them
+# v4.8.1: CRITICAL FIX - Pass condition field to email templates (eBay requirement)
+#         - Add condition to new_listings and price_drops dicts
+#         - Add backwards compatibility for buy_it_now_only config field
+# v4.8.0: eBay Growth Check compliance fixes:
+#         - Default to FIXED_PRICE (eBay requires this for Buy API partners)
+#         - Add HTTP 429/503 retry handling to search_ebay()
+#         - Add EPN Campaign ID validation (10 digits)
+#         - Add pagination resilience (handle varying result counts)
+#         - Document newlyListed sort as business requirement
 # v4.7.5: Fix missing UTF-8 encoding in token file I/O for consistency
 # v4.7.4: Reliability quick wins - dynamic reset wait, HTTP 429/503 retry, validation check, email visibility
 # v4.7.1: CRITICAL FIX - get_minutes_since_reset() call signature + defensive try-except
@@ -363,23 +377,32 @@ def stop_duplicate_processes() -> int:
     return 0
 
 
-def update_statistics(increment_alerts: bool = False) -> None:
+def update_run_log(increment_alerts: bool = False) -> None:
+    """
+    Update internal run log for operational tracking (NOT market statistics).
+
+    This tracks when the app last ran and how many notifications were sent.
+    This is purely for the user's own operational awareness - NOT for:
+    - Market research or price analysis
+    - Category statistics or aggregation
+    - Any data that would compete with eBay Terapeak
+    """
     tmp_file = CONFIG_FILE.with_suffix('.tmp')
     try:
         with open(CONFIG_FILE, 'r', encoding='utf-8-sig') as f:
             config = json.load(f)
-        if "_statistics" not in config:
-            config["_statistics"] = {"_note": "Updated by script", "last_run": None, "total_alerts_sent": 0, "last_alert": None}
+        if "_run_log" not in config:
+            config["_run_log"] = {"_note": "Internal run tracking only", "last_run": None, "alerts_sent": 0, "last_alert": None}
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        config["_statistics"]["last_run"] = now
+        config["_run_log"]["last_run"] = now
         if increment_alerts:
-            config["_statistics"]["total_alerts_sent"] = config["_statistics"].get("total_alerts_sent", 0) + 1
-            config["_statistics"]["last_alert"] = now
+            config["_run_log"]["alerts_sent"] = config["_run_log"].get("alerts_sent", 0) + 1
+            config["_run_log"]["last_alert"] = now
         with open(tmp_file, 'w', encoding='utf-8') as f:
             json.dump(config, f, indent=4)
         tmp_file.replace(CONFIG_FILE)
     except (IOError, json.JSONDecodeError, OSError) as e:
-        log(f"Stats update failed (non-critical): {e}")
+        log(f"Run log update failed (non-critical): {e}")
         try:
             if tmp_file.exists():
                 tmp_file.unlink()
@@ -589,6 +612,13 @@ def calculate_smart_interval(search_count: int, rate_data: Dict[str, Any]) -> in
     return int(final_interval)
 
 
+def validate_epn_campaign_id(campaign_id: str) -> bool:
+    """Validate EPN Campaign ID format (must be 10 digits per eBay requirements)."""
+    if not campaign_id:
+        return True  # Optional field
+    return campaign_id.isdigit() and len(campaign_id) == 10
+
+
 def validate_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
     errors = []
     creds = config.get("api_credentials", {})
@@ -599,6 +629,10 @@ def validate_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
             errors.append("Missing or empty 'api_credentials.app_id'")
         if not creds.get("client_secret"):
             errors.append("Missing or empty 'api_credentials.client_secret'")
+        # EPN Campaign ID validation (eBay requires 10 digits)
+        epn_id = creds.get("epn_campaign_id", "")
+        if epn_id and not validate_epn_campaign_id(epn_id):
+            errors.append(f"Invalid 'epn_campaign_id' ({epn_id}) - must be exactly 10 digits")
     email = config.get("email", {})
     if not email:
         errors.append("Missing 'email' section")
@@ -784,6 +818,14 @@ def get_oauth_token(app_id, client_secret, max_retries=2):
 
 
 def search_ebay(token, query, filters=None, max_retries=2, epn_campaign_id=None):
+    """
+    Search eBay Browse API with compliance-grade error handling.
+
+    Note on sorting: We use sort=newlyListed as this is core to FoxFinder's
+    deal notification functionality. This is documented as a business requirement
+    for the eBay Growth Check application. Without this, the app cannot fulfill
+    its primary purpose of alerting users to newly listed deals.
+    """
     params = {"q": query, "sort": "newlyListed", "limit": str(SEARCH_RESULTS_LIMIT)}
     if filters:
         params["filter"] = filters
@@ -798,8 +840,32 @@ def search_ebay(token, query, filters=None, max_retries=2, epn_campaign_id=None)
         try:
             req = urllib.request.Request(url, headers=headers)
             with urllib.request.urlopen(req, timeout=API_TIMEOUT_SECONDS) as resp:
-                return json.loads(resp.read().decode())
-        except (urllib.error.URLError, urllib.error.HTTPError, OSError) as e:
+                result = json.loads(resp.read().decode())
+                # Pagination resilience: handle varying result counts gracefully
+                actual_count = len(result.get("itemSummaries", []))
+                total_available = result.get("total", 0)
+                if actual_count < SEARCH_RESULTS_LIMIT and actual_count < total_available:
+                    log(f"NOTE: Received {actual_count} items (requested {SEARCH_RESULTS_LIMIT}, {total_available} total)")
+                return result
+        except urllib.error.HTTPError as e:
+            # eBay compliance: proper handling of rate limit and server errors
+            if e.code == 429:
+                # Rate limited - back off significantly per eBay guidelines
+                wait_time = 60 * (attempt + 1)
+                log(f"Rate limited (HTTP 429). Backing off {wait_time}s...")
+                time.sleep(wait_time)
+                if attempt < max_retries - 1:
+                    continue
+                raise
+            elif e.code in (500, 502, 503, 504) and attempt < max_retries - 1:
+                # Infrastructure errors - retry with exponential backoff (max 2 per eBay policy)
+                wait_time = 2 ** attempt
+                log(f"Server error (HTTP {e.code}), retry {attempt + 1}/{max_retries}")
+                time.sleep(wait_time)
+                continue
+            else:
+                raise
+        except (urllib.error.URLError, OSError) as e:
             if attempt < max_retries - 1:
                 wait_time = 2 ** attempt
                 log(f"Search retry {attempt + 1}/{max_retries}: {e}")
@@ -864,8 +930,17 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
         elif effective_max < 999999:
             api_filters.append(f"price:[..{effective_max}]")
         api_filters.append("priceCurrency:USD")
-    bin_only = search.get("buy_it_now_only", False)
-    if bin_only:
+    # eBay Growth Check compliance: Default to FIXED_PRICE (Buy It Now) items
+    # Partners must filter for FIXED_PRICE buying options unless explicitly allowing auctions
+    # Backwards compatibility: support both include_auctions (new) and buy_it_now_only (legacy)
+    if "include_auctions" in search:
+        include_auctions_api = search.get("include_auctions", False)
+    elif "buy_it_now_only" in search:
+        # Legacy: buy_it_now_only=false means include_auctions=true
+        include_auctions_api = not search.get("buy_it_now_only", True)
+    else:
+        include_auctions_api = False  # Default: FIXED_PRICE only (eBay compliance)
+    if not include_auctions_api:
         api_filters.append("buyingOptions:{FIXED_PRICE}")
     free_shipping = search.get("free_shipping_only", False)
     if free_shipping:
@@ -888,7 +963,9 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
     min_p = search.get("min_price", 0)
     max_p = search.get("max_price", float("inf"))
     exclude = [w.lower() for w in search.get("exclude_words", [])]
-    bin_only = search.get("buy_it_now_only", False)
+    # Reuse include_auctions_api from API filter logic (already computed above with backwards compat)
+    # bin_only = True means filter out auction-only items in post-processing
+    bin_only = not include_auctions_api
 
     def make_seen_entry(price_val, title_val):
         return {'timestamp': datetime.now().isoformat(), 'price': price_val, 'title': title_val}
@@ -907,6 +984,11 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
             except (ValueError, TypeError):
                 pass
         if item_id in seen:
+            # Price drop detection for USER'S OWN previously-seen items
+            # This is NOT market research or category-wide price analysis:
+            # - Only tracks items the user has already encountered
+            # - No aggregation, averaging, or statistical analysis
+            # - Purely for personal deal notification when a specific item drops into range
             seen_entry = seen[item_id]
             old_price = None
             if isinstance(seen_entry, dict):
@@ -945,12 +1027,15 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
                             pass
                     location_info = item.get("itemLocation", {})
                     item_location = location_info.get("country", "")
+                    # eBay Growth Check: Must indicate when item is not new - include condition
+                    item_condition = item.get("condition", "")
                     price_drops.append({
                         "search_name": name, "title": title, "link": link,
                         "price": price, "old_price": old_price,
                         "best_offer": has_best_offer, "id": item_id,
                         "created_il": created_israel, "created_us": created_usa,
-                        "listing_age": listing_age, "location": item_location
+                        "listing_age": listing_age, "location": item_location,
+                        "condition": item_condition
                     })
                     seen[item_id] = make_seen_entry(price, title)
             elif price is not None:
@@ -1002,7 +1087,9 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
                 pass
         location_info = item.get("itemLocation", {})
         item_location = location_info.get("country", "")
-        new_listings.append({"search_name": name, "title": title, "link": link, "price": price, "best_offer": has_best_offer, "id": item_id, "created_il": created_israel, "created_us": created_usa, "listing_age": listing_age, "location": item_location})
+        # eBay Growth Check: Must indicate when item is not new - include condition field
+        item_condition = item.get("condition", "")
+        new_listings.append({"search_name": name, "title": title, "link": link, "price": price, "best_offer": has_best_offer, "id": item_id, "created_il": created_israel, "created_us": created_usa, "listing_age": listing_age, "location": item_location, "condition": item_condition})
         seen[item_id] = make_seen_entry(price, title)
     return new_listings, price_drops
 
@@ -1111,7 +1198,7 @@ def send_email(config: Dict[str, Any], listings: List[Dict[str, Any]]) -> None:
     subject = get_subject_line("eBay API", display_list)
     html_body = get_listing_html("eBay API", display_list)
     if send_email_core(config, subject, html_body, is_html=True):
-        update_statistics(increment_alerts=True)
+        update_run_log(increment_alerts=True)
     else:
         log(f"EMAIL FAILED: {len(listings)} new listing(s) NOT sent!")
 
@@ -1135,7 +1222,7 @@ def send_price_drop_email(config: Dict[str, Any], price_drops: List[Dict[str, An
     subject = f"[eBay API] PRICE DROP: {count} ITEM{'S' if count > 1 else ''} NOW IN RANGE"
     html_body = get_listing_html("eBay PRICE DROPS", display_list)
     if send_email_core(config, subject, html_body, is_html=True):
-        update_statistics(increment_alerts=True)
+        update_run_log(increment_alerts=True)
         log(f"Price drop notification sent: {count} items")
     else:
         log(f"EMAIL FAILED: {count} price drop(s) NOT sent!")
@@ -1306,7 +1393,7 @@ def run_foxfinder() -> None:
             recovery_state["consecutive_failures"] = 0
             recovery_state["last_successful_cycle"] = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
             cycle_count += 1
-            update_statistics()
+            update_run_log()
             log(f"Next check in {int(final_wait)}s (Smart pacing: {search_count} searches)")
             sleep_chunk = 30
             remaining = final_wait

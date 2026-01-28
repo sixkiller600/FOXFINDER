@@ -109,18 +109,20 @@ Or use the provided control scripts:
 
 ### Search Options
 
-| Option | Type | Description |
-|--------|------|-------------|
-| `name` | string | Display name for the search |
-| `query` | string | eBay search query |
-| `min_price` | number | Minimum price filter |
-| `max_price` | number | Maximum price filter |
-| `condition` | string | `new`, `used`, `refurbished`, `any` |
-| `buy_it_now_only` | boolean | Skip auctions |
-| `free_shipping_only` | boolean | Only free shipping items |
-| `exclude_words` | array | Words to exclude from results |
-| `required_words` | array | Words that must appear in title |
-| `enabled` | boolean | Enable/disable this search |
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `name` | string | required | Display name for the search |
+| `query` | string | required | eBay search query |
+| `min_price` | number | 0 | Minimum price filter |
+| `max_price` | number | 999999 | Maximum price filter |
+| `condition` | string | any | `new`, `used`, `refurbished`, `any` |
+| `include_auctions` | boolean | **false** | Include auction items (default: Buy It Now only) |
+| `free_shipping_only` | boolean | false | Only free shipping items |
+| `exclude_words` | array | [] | Words to exclude from results |
+| `required_words` | array | [] | Words that must appear in title |
+| `enabled` | boolean | true | Enable/disable this search |
+
+> **Note:** Per eBay Growth Check requirements, FoxFinder defaults to **Buy It Now (FIXED_PRICE) items only**. Set `"include_auctions": true` to also see auction listings.
 
 ## eBay API Compliance
 

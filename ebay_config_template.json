@@ -39,9 +39,10 @@
             "exclude_words": ["broken", "parts", "repair"],
             "required_words": ["256GB"],
             "condition": "any",
-            "buy_it_now_only": false,
+            "include_auctions": false,
             "free_shipping_only": false,
-            "enabled": true
+            "enabled": true,
+            "_note": "include_auctions defaults to false (Buy It Now only) per eBay Growth Check requirements"
         }
     ]
 }

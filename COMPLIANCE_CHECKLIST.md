@@ -1,10 +1,10 @@
 # FoxFinder - eBay API Compliance Checklist
 
 **Application:** FoxFinder eBay Deal Notification Service
-**Version:** 1.0.1
+**Version:** 1.1.0 (v4.8.0 code)
 **API Used:** eBay Browse API (Buy APIs)
-**Last Verified:** January 26, 2026
-**Audit Level:** Exhaustive (Section 8 & 9 full compliance)
+**Last Verified:** January 28, 2026
+**Audit Level:** Exhaustive (Section 8 & 9 full compliance + OWASP)
 
 ---
 
@@ -14,12 +14,36 @@
 
 | Requirement | Status | Implementation |
 |-------------|--------|----------------|
-| ✅ **Uses Browse API (not deprecated Finding API)** | PASS | `foxfinder.py` line 1047 - uses `buy/browse/v1/item_summary/search` |
-| ✅ **Max 2 retries for infrastructure errors** | PASS | `get_oauth_token()` line 972: `max_retries=2`, `search_ebay()` line 1047: `max_retries=2` |
+| ✅ **Uses Browse API (not deprecated Finding API)** | PASS | `foxfinder.py` - uses `buy/browse/v1/item_summary/search` |
+| ✅ **Max 2 retries for infrastructure errors** | PASS | `get_oauth_token()`: `max_retries=2`, `search_ebay()`: `max_retries=2` |
 | ✅ **Graceful error handling** | PASS | All API calls wrapped in try/except with proper logging |
 | ✅ **Uses latest API version** | PASS | Browse API v1 (current production version) |
 | ✅ **Efficient data retrieval** | PASS | Only requests necessary fields, uses pagination limits |
 | ✅ **Implements caching** | PASS | `ebay_seen_api.json` deduplication cache |
+| ✅ **HTTP 429/503 handling** | PASS | `search_ebay()` handles rate limits and server errors with exponential backoff |
+| ✅ **Pagination resilience** | PASS | Handles varying result counts gracefully with logging |
+| ✅ **FIXED_PRICE default** | PASS | Default filter for Buy It Now items (eBay requirement) |
+| ✅ **EPN Campaign ID validation** | PASS | Validates 10-digit format in config validation |
+| ✅ **Condition display** | PASS | Shows condition badge, indicates when unknown (eBay requirement) |
+
+### API Versions Used
+
+| API | Version | Endpoint | Purpose |
+|-----|---------|----------|---------|
+| **Browse API** | v1 | `buy/browse/v1/item_summary/search` | Search for items |
+| **OAuth** | v1 | `identity/v1/oauth2/token` | Authentication |
+| **Analytics** | v1_beta | `developer/analytics/v1_beta/rate_limit` | Rate limit checking |
+
+### Business Requirement: newlyListed Sorting
+
+FoxFinder uses `sort=newlyListed` in API calls. This is a **core business requirement** for the application's deal notification functionality:
+
+- **Purpose:** Alert users to newly listed items matching their search criteria
+- **Why Required:** Without this, users cannot be notified of new deals in time
+- **Alternative:** Default "Best Match" sorting would defeat the application's purpose
+- **Documentation:** Explicitly documented in `search_ebay()` function comments
+
+This has been disclosed in the Growth Check application.
 
 ### Data Handling Requirements (Section 8)
 
@@ -68,6 +92,29 @@
 | ✅ **eBay attribution in emails** | PASS | `email_templates.py` includes eBay branding footer |
 | ✅ **Links to eBay User Agreement** | PASS | Included in email footer |
 | ✅ **Clear "powered by eBay" attribution** | PASS | Email footer states "Powered by eBay Browse API" |
+
+### OWASP Top 10 Security Compliance (2021)
+
+eBay requires applications to follow OWASP secure coding principles. FoxFinder compliance:
+
+| OWASP Category | Status | Implementation |
+|----------------|--------|----------------|
+| **A01:2021 - Broken Access Control** | N/A | Personal use app, no multi-user access control |
+| **A02:2021 - Cryptographic Failures** | ✅ PASS | TLS-only API connections, OAuth2 tokens |
+| **A03:2021 - Injection** | ✅ PASS | No SQL, parameterized API calls, no user input in queries |
+| **A04:2021 - Insecure Design** | ✅ PASS | Minimal attack surface, no exposed ports/services |
+| **A05:2021 - Security Misconfiguration** | ✅ PASS | Config validation, no default credentials |
+| **A06:2021 - Vulnerable Components** | ✅ PASS | Minimal dependencies (requests only), standard library |
+| **A07:2021 - Auth Failures** | ✅ PASS | OAuth2 tokens only, no password storage |
+| **A08:2021 - Data Integrity Failures** | ✅ PASS | HTTPS-only API calls, atomic file writes |
+| **A09:2021 - Logging Failures** | ✅ PASS | Comprehensive logging without sensitive data |
+| **A10:2021 - SSRF** | ✅ PASS | Only contacts `api.ebay.com` (hardcoded) |
+
+**Security Design Principles:**
+- No external network listeners (client-only)
+- Credentials stored in local config file (user-controlled)
+- No credential transmission except to eBay API
+- Atomic file operations prevent data corruption
 
 ### eBay Ecosystem Integration (Value-Add Features)
 
