@@ -1,12 +1,7 @@
 """
-FoxFinder - Shared Utilities Module
-===================================
-Reliability Level Reliability - Shared patterns for:
-- FoxFinder eBay Deal Notification Service (foxfinder.py)
+FoxFinder - Shared Utilities
 
-Maintains single source of truth for common functionality.
-
-v1.2.0: Standalone release for FoxFinder
+Common functions for file operations, heartbeat, and shutdown handling.
 """
 
 import time
@@ -19,34 +14,14 @@ from typing import Callable, Optional, Tuple
 VERSION = "1.2.0"
 __version__ = VERSION
 
-# =============================================================================
-# DISK SPACE CHECK - Reliability Pattern
-# =============================================================================
+# --- Disk Space ---
 
 # Minimum free disk space for safe writes (in MB)
 MIN_DISK_SPACE_MB = 100
 
 
 def check_disk_space(path: Path, min_mb: int = MIN_DISK_SPACE_MB) -> Tuple[bool, int]:
-    """
-    Reliability Pattern: Check disk space before critical writes.
-
-    Prevents silent data corruption when disk is full.
-    Should be called before atomic write operations.
-
-    Args:
-        path: Path to check (uses its drive/filesystem)
-        min_mb: Minimum required free space in MB (default 100MB)
-
-    Returns:
-        Tuple (has_space: bool, free_mb: int)
-
-    Example:
-        has_space, free_mb = check_disk_space(CONFIG_FILE)
-        if not has_space:
-            log(f"WARNING: Low disk space ({free_mb}MB), skipping write")
-            return False
-    """
+    """Check if there's enough disk space. Returns (has_space, free_mb)."""
     try:
         # Get the directory to check (parent if path is a file)
         check_path = path.parent if path.is_file() or not path.exists() else path
@@ -60,29 +35,14 @@ def check_disk_space(path: Path, min_mb: int = MIN_DISK_SPACE_MB) -> Tuple[bool,
         # If we can't check, assume OK (fail-open for non-critical check)
         return True, -1
 
-# =============================================================================
-# Reliability INTERRUPTIBLE OPERATIONS
-# =============================================================================
+# --- Interruptible Operations ---
 
 def interruptible_sleep(
     seconds: float,
     shutdown_check: Callable[[], bool],
     check_interval: float = 1.0
 ) -> bool:
-    """
-    Reliability Pattern: Sleep that can be interrupted by shutdown signal.
-
-    Instead of blocking for the full duration, checks shutdown flag periodically.
-    This allows graceful shutdown to work within check_interval seconds.
-
-    Args:
-        seconds: Total time to sleep
-        shutdown_check: Callable that returns True if shutdown requested
-        check_interval: How often to check for shutdown (default 1s)
-
-    Returns:
-        True if interrupted by shutdown, False if completed normally
-    """
+    """Sleep that checks for shutdown. Returns True if interrupted."""
     elapsed = 0.0
     while elapsed < seconds:
         if shutdown_check():
@@ -100,19 +60,7 @@ def interruptible_wait(
     check_interval: float = 0.5,
     description: str = "condition"
 ) -> Tuple[bool, bool]:
-    """
-    Reliability Pattern: Wait for a condition with shutdown awareness.
-
-    Args:
-        condition_func: Callable that returns True when condition is met
-        shutdown_check: Callable that returns True if shutdown requested
-        timeout_seconds: Maximum time to wait
-        check_interval: How often to check condition and shutdown
-        description: For logging purposes
-
-    Returns:
-        Tuple (condition_met: bool, interrupted: bool)
-    """
+    """Wait for condition, checking for shutdown. Returns (met, interrupted)."""
     elapsed = 0.0
     while elapsed < timeout_seconds:
         if shutdown_check():
@@ -127,9 +75,9 @@ def interruptible_wait(
     return False, False  # Timeout, not interrupted
 
 
-# =============================================================================
+# ---
 # HEARTBEAT MANAGEMENT
-# =============================================================================
+# ---
 
 def update_heartbeat(
     heartbeat_file: Path,
@@ -213,9 +161,9 @@ def get_heartbeat_age_seconds(heartbeat_file: Path) -> int:
     return -1
 
 
-# =============================================================================
+# ---
 # LOG ROTATION
-# =============================================================================
+# ---
 
 def rotate_log_if_needed(log_file: Path, max_size_bytes: int = 5 * 1024 * 1024) -> bool:
     """
@@ -242,9 +190,9 @@ def rotate_log_if_needed(log_file: Path, max_size_bytes: int = 5 * 1024 * 1024) 
     return False
 
 
-# =============================================================================
+# ---
 # SHUTDOWN FILE MANAGEMENT
-# =============================================================================
+# ---
 
 def check_shutdown_file(shutdown_file: Path) -> bool:
     """
@@ -294,9 +242,9 @@ def request_shutdown(shutdown_file: Path) -> bool:
         return False
 
 
-# =============================================================================
+# ---
 # UTILITY FUNCTIONS
-# =============================================================================
+# ---
 
 def format_duration(seconds: int) -> str:
     """
@@ -346,20 +294,7 @@ def safe_json_load(file_path: Path, default: dict = None) -> dict:
 
 
 def safe_json_save(file_path: Path, data: dict, indent: int = 2) -> bool:
-    """
-    Safely save dict to JSON file using atomic write pattern.
-
-    Reliability Pattern: Write to temp file, then rename (atomic on most filesystems).
-    Prevents data corruption if process interrupted mid-write.
-
-    Args:
-        file_path: Path to JSON file
-        data: Dict to save
-        indent: JSON indentation (default 2)
-
-    Returns:
-        True if successful, False otherwise
-    """
+    """Save dict to JSON using temp file + rename (atomic write)."""
     try:
         temp_file = file_path.with_suffix('.tmp')
         temp_file.write_text(json.dumps(data, indent=indent, ensure_ascii=False), encoding='utf-8')

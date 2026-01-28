@@ -1,18 +1,9 @@
 #!/usr/bin/env python3
 """
 FoxFinder - eBay Common Module
-==============================
 
-Reliability Level Reliability - Shared between:
-- foxfinder.py (automated deal notification)
-- Status dashboard scripts
-
-This ensures consistency in:
-- Logging with rotation
-- Heartbeat management
-- Shutdown signal handling
-- Rate limit state management
-- Interruptible operations
+Shared code for foxfinder.py and status dashboard.
+Handles logging, heartbeat, shutdown signals, and rate limiting.
 """
 
 import os
@@ -23,7 +14,7 @@ from pathlib import Path
 from datetime import datetime, timezone, timedelta
 from typing import Dict, Any, Optional, Tuple
 
-# Reliability: Import disk space check from shared utilities (same directory)
+# Import disk space check if available
 try:
     from shared_utils import check_disk_space
     _HAS_DISK_CHECK = True
@@ -39,9 +30,9 @@ try:
 except ImportError:
     HAS_ZONEINFO = False
 
-# =============================================================================
+# ---
 # VERSION INFO
-# =============================================================================
+# ---
 
 VERSION = "1.2.1"
 __version__ = VERSION
@@ -63,9 +54,9 @@ __version__ = VERSION
 # - Atomic write pattern for save_rate_state() (temp+rename)
 # - Full Reliability compliance for crash safety
 
-# =============================================================================
+# ---
 # PATHS - Single source of truth
-# =============================================================================
+# ---
 
 SCRIPT_DIR = Path(__file__).parent
 CONFIG_FILE = SCRIPT_DIR / "ebay_config.json"
@@ -84,9 +75,9 @@ API_UPDATE_ALERT_FILE = SCRIPT_DIR / "API_UPDATE_NOTICE.txt"
 # Email failure tracking
 EMAIL_FAILURES_FILE = SCRIPT_DIR / ".email_failures"
 
-# =============================================================================
+# ---
 # CONSTANTS
-# =============================================================================
+# ---
 
 # eBay API
 EBAY_API_BASE = "https://api.ebay.com"
@@ -99,9 +90,9 @@ MIN_INTERVAL_SECONDS = 30
 # Log rotation
 LOG_MAX_SIZE_MB = 10
 
-# =============================================================================
+# ---
 # LOGGING
-# =============================================================================
+# ---
 
 def log(message: str, log_file: Path = None, verbose: bool = True) -> None:
     """
@@ -157,9 +148,9 @@ def rotate_logs() -> bool:
     return False
 
 
-# =============================================================================
+# ---
 # HEARTBEAT MANAGEMENT
-# =============================================================================
+# ---
 
 def update_heartbeat(source: str = "foxfinder", version: str = VERSION) -> None:
     """
@@ -197,9 +188,9 @@ def read_heartbeat() -> Optional[Dict[str, Any]]:
     return None
 
 
-# =============================================================================
+# ---
 # SHUTDOWN SIGNAL MANAGEMENT
-# =============================================================================
+# ---
 
 def is_shutdown_requested() -> bool:
     """Check if graceful shutdown has been requested."""
@@ -238,23 +229,12 @@ def clear_shutdown_request() -> bool:
     return False
 
 
-# =============================================================================
-# INTERRUPTIBLE OPERATIONS - Reliability Pattern
-# =============================================================================
+# --- Interruptible Operations ---
 
 def interruptible_sleep(seconds: float, check_interval: float = 1.0) -> bool:
     """
-    Reliability Pattern: Sleep that can be interrupted by shutdown signal.
-
-    Instead of blocking for the full duration, checks shutdown flag periodically.
-    This allows graceful shutdown to work within check_interval seconds.
-
-    Args:
-        seconds: Total time to sleep
-        check_interval: How often to check for shutdown (default 1s)
-
-    Returns:
-        True if interrupted by shutdown, False if completed normally
+    Sleep that checks for shutdown requests periodically.
+    Returns True if interrupted, False if completed.
     """
     elapsed = 0.0
     while elapsed < seconds:
@@ -273,16 +253,8 @@ def interruptible_wait(
     description: str = "condition"
 ) -> Tuple[bool, bool]:
     """
-    Reliability Pattern: Wait for a condition with shutdown awareness.
-
-    Args:
-        condition_func: Callable that returns True when condition is met
-        timeout_seconds: Maximum time to wait
-        check_interval: How often to check condition and shutdown
-        description: For logging purposes
-
-    Returns:
-        Tuple (condition_met: bool, interrupted: bool)
+    Wait for condition_func() to return True, checking for shutdown.
+    Returns (condition_met, was_interrupted).
     """
     elapsed = 0.0
     while elapsed < timeout_seconds:
@@ -298,9 +270,9 @@ def interruptible_wait(
     return False, False  # Timeout, not interrupted
 
 
-# =============================================================================
+# ---
 # RATE LIMIT STATE MANAGEMENT
-# =============================================================================
+# ---
 
 def _get_nth_weekday_of_month(year: int, month: int, weekday: int, n: int) -> int:
     """
@@ -757,9 +729,9 @@ def should_force_api_refresh(rate_data: Dict[str, Any]) -> Tuple[bool, str]:
     return False, ""
 
 
-# =============================================================================
+# ---
 # CONFIG MANAGEMENT
-# =============================================================================
+# ---
 
 _cached_config: Optional[Dict[str, Any]] = None
 
@@ -809,9 +781,9 @@ def load_config() -> Dict[str, Any]:
         return {}
 
 
-# =============================================================================
+# ---
 # CONNECTIVITY CHECK
-# =============================================================================
+# ---
 
 def check_internet() -> bool:
     """Connectivity check using eBay API endpoint."""
@@ -825,9 +797,9 @@ def check_internet() -> bool:
         return False
 
 
-# =============================================================================
+# ---
 # SMTP CONFIGURATION
-# =============================================================================
+# ---
 
 def get_smtp_config(config: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -861,9 +833,9 @@ def get_smtp_config(config: Dict[str, Any]) -> Dict[str, Any]:
     }
 
 
-# =============================================================================
+# ---
 # MODULE INFO
-# =============================================================================
+# ---
 
 def get_module_info() -> Dict[str, Any]:
     """Get info about this module."""

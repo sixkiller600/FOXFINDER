@@ -47,9 +47,7 @@ __version__ = VERSION
 # v4.5.0: Reliability hardening - HTTP retry, token retry, API validation, memory cap
 # v4.4.0: Robust rate limit sync - post-reset retry, sanity validation, auto-recovery
 
-# =============================================================================
-# [ CONSTANTS ]
-# =============================================================================
+# --- Constants ---
 ERROR_RETRY_INTERVAL = 60
 API_ERROR_COOLDOWN = 300
 MAX_LOG_SIZE = 10 * 1024 * 1024
@@ -1009,23 +1007,7 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
             except (ValueError, TypeError):
                 pass
         if item_id in seen:
-            # =====================================================================
-            # PRICE DROP DETECTION - eBay Growth Check Compliance Documentation
-            # =====================================================================
-            # This feature tracks price changes on items the USER has previously seen.
-            #
-            # WHY THIS IS COMPLIANT (NOT market research or price modeling):
-            # 1. Individual item tracking only - NO aggregation across listings
-            # 2. NO averaging, trending, or statistical analysis
-            # 3. NO category-wide or site-wide price data collection
-            # 4. Functionally identical to eBay's own Watchlist price alerts
-            # 5. Personal deal notification for specific items only
-            #
-            # This does NOT violate Section 9 prohibitions because:
-            # - It does NOT "suggest or model prices for items listed on eBay"
-            # - It does NOT generate "site-wide statistics" or "market research"
-            # - It simply notifies when a specific saved item's price changed
-            # =====================================================================
+            # Check if price dropped into range (like eBay's Watchlist alerts)
             seen_entry = seen[item_id]
             old_price = None
             if isinstance(seen_entry, dict):
