@@ -1001,16 +1001,37 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
                         except Exception:
                             pass
                     location_info = item.get("itemLocation", {})
-                    item_location = location_info.get("country", "")
+                    item_state = location_info.get("stateOrProvince", "")
+                    item_location = f"{item_state}, {location_info.get('country', '')}" if item_state else location_info.get("country", "")
                     # eBay Growth Check: Must indicate when item is not new - include condition
                     item_condition = item.get("condition", "")
+                    # Browse API enrichment fields
+                    image_url = item.get("image", {}).get("imageUrl", "")
+                    shipping_cost = ""
+                    try:
+                        shipping_options = item.get("shippingOptions", [])
+                        if shipping_options:
+                            cost_info = shipping_options[0].get("shippingCost", {})
+                            cost_val = cost_info.get("value", "")
+                            if cost_val in ("0.00", "0"):
+                                shipping_cost = "FREE"
+                            elif cost_val:
+                                shipping_cost = f"${float(cost_val):,.2f}"
+                    except (ValueError, TypeError, IndexError):
+                        pass
+                    seller_info = item.get("seller", {})
+                    seller_feedback_pct = seller_info.get("feedbackPercentage", "")
+                    seller_feedback_score = seller_info.get("feedbackScore", "")
                     price_drops.append({
                         "search_name": name, "title": title, "link": link,
                         "price": price, "old_price": old_price,
                         "best_offer": has_best_offer, "id": item_id,
                         "created_il": created_israel, "created_us": created_usa,
                         "listing_age": listing_age, "location": item_location,
-                        "condition": item_condition
+                        "condition": item_condition,
+                        "image_url": image_url, "shipping_cost": shipping_cost,
+                        "seller_feedback_pct": seller_feedback_pct,
+                        "seller_feedback_score": seller_feedback_score
                     })
                     seen[item_id] = make_seen_entry(price, title)
             elif price is not None:
@@ -1061,10 +1082,28 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
             except Exception:
                 pass
         location_info = item.get("itemLocation", {})
-        item_location = location_info.get("country", "")
+        item_state = location_info.get("stateOrProvince", "")
+        item_location = f"{item_state}, {location_info.get('country', '')}" if item_state else location_info.get("country", "")
         # eBay Growth Check: Must indicate when item is not new - include condition field
         item_condition = item.get("condition", "")
-        new_listings.append({"search_name": name, "title": title, "link": link, "price": price, "best_offer": has_best_offer, "id": item_id, "created_il": created_israel, "created_us": created_usa, "listing_age": listing_age, "location": item_location, "condition": item_condition})
+        # Browse API enrichment fields
+        image_url = item.get("image", {}).get("imageUrl", "")
+        shipping_cost = ""
+        try:
+            shipping_options = item.get("shippingOptions", [])
+            if shipping_options:
+                cost_info = shipping_options[0].get("shippingCost", {})
+                cost_val = cost_info.get("value", "")
+                if cost_val in ("0.00", "0"):
+                    shipping_cost = "FREE"
+                elif cost_val:
+                    shipping_cost = f"${float(cost_val):,.2f}"
+        except (ValueError, TypeError, IndexError):
+            pass
+        seller_info = item.get("seller", {})
+        seller_feedback_pct = seller_info.get("feedbackPercentage", "")
+        seller_feedback_score = seller_info.get("feedbackScore", "")
+        new_listings.append({"search_name": name, "title": title, "link": link, "price": price, "best_offer": has_best_offer, "id": item_id, "created_il": created_israel, "created_us": created_usa, "listing_age": listing_age, "location": item_location, "condition": item_condition, "image_url": image_url, "shipping_cost": shipping_cost, "seller_feedback_pct": seller_feedback_pct, "seller_feedback_score": seller_feedback_score})
         seen[item_id] = make_seen_entry(price, title)
     return new_listings, price_drops
 

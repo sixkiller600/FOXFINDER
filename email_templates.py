@@ -15,7 +15,8 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.5.0"
+__version__ = "2.6.0"
+# v2.6.0: Add thumbnail, shipping cost, seller feedback to listing rows
 # v2.5.0: eBay Growth Check - "CONDITION UNKNOWN" instead of "N/A" for clarity
 # v2.4.0: eBay Growth Check - show condition badge when item is not new
 # v2.3.0: Add eBay ecosystem links (Today's Deals, Trending, Mobile App)
@@ -318,9 +319,28 @@ def _build_listing_row(item, is_update=False):
     condition = item.get('condition', '')
     condition_badge = _get_condition_badge(condition)
 
+    # Shipping cost display
+    shipping_cost = item.get('shipping_cost', '')
+    shipping_html = ""
+    if shipping_cost == "FREE":
+        shipping_html = f'<div style="font-size: 9px; color: #00a650; margin-top: 2px; font-weight: bold;">FREE SHIPPING</div>'
+    elif shipping_cost:
+        shipping_html = f'<div style="font-size: 9px; color: {COLORS["text_gray"]}; margin-top: 2px;">Ship: {html.escape(shipping_cost)}</div>'
+
+    # Seller feedback display
+    seller_pct = item.get('seller_feedback_pct', '')
+    seller_score = item.get('seller_feedback_score', '')
+    seller_html = ""
+    if seller_pct and seller_score:
+        seller_html = f'<div style="font-size: 9px; color: {COLORS["text_gray"]}; margin-top: 2px;">Seller: {html.escape(str(seller_pct))}% ({html.escape(str(seller_score))})</div>'
+
     info_html = ""
     if condition_badge:
         info_html += f'<div style="margin-top: 3px;">{condition_badge}</div>'
+    if shipping_html:
+        info_html += shipping_html
+    if seller_html:
+        info_html += seller_html
     if time_line:
         info_html += f'<div style="font-size: 9px; color: {COLORS["text_cyan"]}; margin-top: 3px;">{html.escape(time_line)}</div>'
     if location_line:
@@ -333,10 +353,16 @@ def _build_listing_row(item, is_update=False):
     if watchlist_url:
         watch_link_html = f' <a href="{html.escape(watchlist_url)}" style="color: {COLORS["text_cyan"]}; text-decoration: none; font-size: 10px;">[WATCH]</a>'
 
+    # Thumbnail image
+    image_url = item.get('image_url', '')
+    thumb_html = ""
+    if image_url:
+        thumb_html = f'<img src="{html.escape(image_url)}" alt="" width="60" height="60" style="float: left; margin-right: 8px; margin-bottom: 4px; border-radius: 3px; background: #222;">'
+
     return f'''
     <tr style="border-bottom: 1px solid {COLORS['border']}; {bg}">
         <td style="padding: 10px 8px; vertical-align: top;">
-            <a href="{link}" style="color: {txt_c}; text-decoration: none; font-size: 13px; line-height: 1.3; display: block;">{html.escape(display_text)}</a>{info_html}
+            {thumb_html}<a href="{link}" style="color: {txt_c}; text-decoration: none; font-size: 13px; line-height: 1.3; display: block;">{html.escape(display_text)}</a>{info_html}
         </td>
         <td style="padding: 10px 8px; text-align: right; vertical-align: top; white-space: nowrap;">
             <div style="color: {COLORS['text_green']}; font-weight: bold; font-size: 15px;">{html.escape(p_str)}</div>

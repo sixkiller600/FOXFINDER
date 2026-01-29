@@ -271,7 +271,7 @@ from email_templates import (
     EBAY_ATTRIBUTION,
 )
 
-test("email_templates version", ET_VERSION == "2.5.0")
+test("email_templates version", ET_VERSION == "2.6.0")
 test("COLORS is dict", isinstance(COLORS, dict))
 test("CONDITION_BADGES is dict", isinstance(CONDITION_BADGES, dict))
 test("EBAY_ATTRIBUTION is string", isinstance(EBAY_ATTRIBUTION, str))
@@ -367,6 +367,74 @@ test("format_listing_email empty returns None", subj_e is None and body_e is Non
 n_subj, n_body = format_notice_email("Alert", "Details")
 test("format_notice_email returns subject", "[NOTICE]" in n_subj)
 test("format_notice_email returns body", isinstance(n_body, str))
+
+# Browse API enrichment fields: thumbnail, shipping, seller feedback
+enriched_listings = [
+    {
+        "search_name": "Test Search",
+        "title": "Test Enriched Item",
+        "link": "https://www.ebay.com/itm/123456789012",
+        "price": 199.99,
+        "condition": "New",
+        "created_il": "10:30 AM",
+        "created_us": "1:30 AM",
+        "location": "California, US",
+        "image_url": "https://i.ebayimg.com/images/g/test/s-l225.jpg",
+        "shipping_cost": "FREE",
+        "seller_feedback_pct": "99.2",
+        "seller_feedback_score": "2450",
+    }
+]
+enriched_html = get_listing_html("TEST ENRICHED", enriched_listings)
+test("enriched HTML has <img tag", "<img " in enriched_html)
+test("enriched HTML has image src", "s-l225.jpg" in enriched_html)
+test("enriched HTML has FREE SHIPPING", "FREE SHIPPING" in enriched_html)
+test("enriched HTML has Seller feedback", "Seller:" in enriched_html and "99.2%" in enriched_html)
+test("enriched HTML has feedback score", "2450" in enriched_html)
+
+# Shipping cost with dollar amount
+ship_cost_listings = [
+    {"search_name": "T", "title": "Ship Cost Item", "link": "#", "price": 50,
+     "shipping_cost": "$12.99"}
+]
+ship_html = get_listing_html("TEST", ship_cost_listings)
+test("shipping cost renders Ship: prefix", "Ship:" in ship_html and "$12.99" in ship_html)
+
+# Missing enrichment fields - graceful handling
+bare_listings = [
+    {"search_name": "T", "title": "Bare Item", "link": "#", "price": 100}
+]
+try:
+    bare_html = get_listing_html("TEST", bare_listings)
+    test("bare listing (no enrichment) renders OK", isinstance(bare_html, str))
+    test("bare listing has no <img tag", "<img " not in bare_html)
+    test("bare listing has no FREE SHIPPING", "FREE SHIPPING" not in bare_html)
+    test("bare listing has no Ship:", "Ship:" not in bare_html)
+    test("bare listing has no Seller:", "Seller:" not in bare_html)
+except Exception as e:
+    test("bare listing (no enrichment) renders OK", False, str(e))
+
+# Empty string enrichment fields - no empty artifacts
+empty_enrich = [
+    {"search_name": "T", "title": "Empty Fields", "link": "#", "price": 100,
+     "image_url": "", "shipping_cost": "", "seller_feedback_pct": "", "seller_feedback_score": ""}
+]
+try:
+    empty_html = get_listing_html("TEST", empty_enrich)
+    test("empty enrichment fields render OK", isinstance(empty_html, str))
+    test("empty image_url produces no <img", "<img " not in empty_html)
+    test("empty shipping produces no Ship:", "Ship:" not in empty_html)
+    test("empty seller produces no Seller:", "Seller:" not in empty_html)
+except Exception as e:
+    test("empty enrichment fields render OK", False, str(e))
+
+# Partial seller feedback (only pct, no score) - should not render
+partial_seller = [
+    {"search_name": "T", "title": "Partial Seller", "link": "#", "price": 100,
+     "seller_feedback_pct": "98.5", "seller_feedback_score": ""}
+]
+partial_html = get_listing_html("TEST", partial_seller)
+test("partial seller feedback not rendered", "Seller:" not in partial_html)
 
 # XSS prevention (HTML escaping)
 xss_listings = [{"search_name": "XSS", "title": '<script>alert("xss")</script>', "link": "https://ebay.com/itm/123456789012", "price": 100}]
@@ -662,7 +730,7 @@ section("Version Consistency")
 # Read versions from modules
 test("foxfinder.py version = 4.9.0", FF_VERSION == "4.9.0")
 test("ebay_common.py version = 1.2.1", EC_VERSION == "1.2.1")
-test("email_templates.py version = 2.5.0", ET_VERSION == "2.5.0")
+test("email_templates.py version = 2.6.0", ET_VERSION == "2.6.0")
 test("shared_utils.py version = 1.2.0", SU_VERSION == "1.2.0")
 
 # Check CHANGELOG mentions these versions
@@ -670,7 +738,7 @@ changelog = (repo_root / "CHANGELOG.md").read_text()
 test("CHANGELOG mentions foxfinder 4.9.0", "4.9.0" in changelog)
 test("CHANGELOG component table has foxfinder.py 4.9.0", "foxfinder.py" in changelog and "4.9.0" in changelog)
 test("CHANGELOG component table has ebay_common.py 1.2.1", "1.2.1" in changelog)
-test("CHANGELOG component table has email_templates.py 2.5.0", "2.5.0" in changelog)
+test("CHANGELOG component table has email_templates.py 2.6.0", "2.6.0" in changelog)
 test("CHANGELOG component table has shared_utils.py 1.2.0", "1.2.0" in changelog)
 
 

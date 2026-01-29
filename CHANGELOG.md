@@ -6,6 +6,14 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.9.1] - 2026-01-29
+
+### Added
+- Thumbnail images in email notifications (from Browse API `image.imageUrl`)
+- Shipping cost display: "FREE SHIPPING" or "Ship: $X.XX" (from `shippingOptions`)
+- Seller feedback percentage and score in listing rows (from `seller` object)
+- State/province in item location (e.g., "California, US" instead of just "US")
+
 ## [4.9.0] - 2026-01-28
 
 ### Added
@@ -139,7 +147,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 |-----------|---------|-------------|
 | `foxfinder.py` | 4.9.0 | Main application |
 | `ebay_common.py` | 1.2.1 | Shared utilities |
-| `email_templates.py` | 2.5.0 | Email templates |
+| `email_templates.py` | 2.6.0 | Email templates |
 | `shared_utils.py` | 1.2.0 | Utility functions |
 
 ---
