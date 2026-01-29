@@ -777,6 +777,14 @@ def search_ebay(token, query, filters=None, max_retries=2, epn_campaign_id=None)
     for the eBay Growth Check application. Without this, the app cannot fulfill
     its primary purpose of alerting users to newly listed deals.
     """
+    # eBay Browse API: keywords cannot exceed 100 characters (longer strings are truncated)
+    if len(query) > 100:
+        log(f"WARNING: Query truncated to 100 chars (was {len(query)})")
+        query = query[:100].rsplit(' ', 1)[0]  # truncate at word boundary
+    # eBay Browse API: wildcard characters (*) are prohibited in queries
+    if '*' in query:
+        log("WARNING: Wildcard (*) removed from query (prohibited by eBay Browse API)")
+        query = query.replace('*', '')
     params = {"q": query, "sort": "newlyListed", "limit": str(SEARCH_RESULTS_LIMIT)}
     if filters:
         params["filter"] = filters
