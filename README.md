@@ -153,17 +153,44 @@ foxfinder/
 ├── email_templates.py        # HTML email templates with eBay branding
 ├── shared_utils.py           # General utilities (atomic writes)
 ├── check_rate_limit.py       # Rate limit checker utility
+├── test_qa.py                # Comprehensive QA test suite
 ├── ebay_config.json          # Your configuration (gitignored)
 ├── ebay_config_template.json # Configuration template
 ├── requirements.txt          # Python dependencies
+├── README.md                 # This file
+├── CHANGELOG.md              # Version history and release notes
 ├── PRIVACY_POLICY.md         # Privacy policy
 ├── COMPLIANCE_CHECKLIST.md   # eBay API compliance documentation
 ├── LICENSE                   # MIT License
-├── FoxFinder ON.bat          # Start notification service
-├── FoxFinder OFF.bat         # Stop notification service
-└── Status Dashboard.bat      # View status and API usage
+├── FoxFinder ON.bat          # Start notification service (batch wrapper)
+├── FoxFinder ON.ps1          # Start notification service (PowerShell)
+├── FoxFinder OFF.bat         # Stop notification service (batch wrapper)
+├── FoxFinder OFF.ps1         # Stop notification service (PowerShell)
+├── Status Dashboard.bat      # View status and API usage (batch wrapper)
+└── Status Dashboard.ps1      # View status and API usage (PowerShell)
 ```
 
+
+## Testing
+
+FoxFinder includes a comprehensive QA test suite that covers all modules:
+
+```bash
+python test_qa.py
+```
+
+This validates:
+- All module imports and syntax
+- `shared_utils` functions (disk space, heartbeat, JSON I/O, log rotation, shutdown)
+- `ebay_common` functions (DST calculations, rate limiting, config, SMTP auto-detect)
+- `email_templates` functions (HTML generation, XSS prevention, condition badges, watchlist links)
+- `foxfinder` functions (config validation, title matching, EPN validation, seen cleanup)
+- Config template structure and validity
+- Repository file structure completeness
+- Version consistency across modules and CHANGELOG
+- README accuracy (all referenced files exist, links valid)
+- Compliance and privacy document completeness
+- Edge cases (Unicode, long titles, large datasets)
 
 ## Troubleshooting
 
