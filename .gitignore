@@ -8,6 +8,7 @@ ebay_config.bak
 ebay_token.json
 ebay_rate_limit.json
 ebay_seen_api.json
+foxfinder_run_log.json
 .heartbeat
 .ebay.lock
 .shutdown_requested

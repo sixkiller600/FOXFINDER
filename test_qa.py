@@ -770,6 +770,98 @@ test(f"Large seen capped at {MAX_SEEN_ENTRIES}", len(cleaned_large) <= MAX_SEEN_
 
 
 # ============================================================
+# 11. ROBUSTNESS FIX VERIFICATION
+# ============================================================
+section("Robustness Fixes (Fix 1-6)")
+
+# Read source files for inspection
+foxfinder_src = (repo_root / "foxfinder.py").read_text(encoding="utf-8")
+ebay_common_src = (repo_root / "ebay_common.py").read_text(encoding="utf-8")
+requirements_src = (repo_root / "requirements.txt").read_text(encoding="utf-8")
+gitignore_src = (repo_root / ".gitignore").read_text(encoding="utf-8")
+
+# Fix 1: Dead USER_SETTINGS.py reference removed
+test("Fix 1: No USER_SETTINGS.py reference", "USER_SETTINGS.py" not in foxfinder_src)
+test("Fix 1: Config copy instructions present", "ebay_config_template.json to ebay_config.json" in foxfinder_src)
+test("Fix 1: README reference in config error", 'See README.md for setup instructions' in foxfinder_src)
+
+# Fix 2: Windows platform guard
+test("Fix 2: cleanup_stale_lock has platform guard", "sys.platform != 'win32'" in foxfinder_src or "sys.platform == 'win32'" in foxfinder_src)
+test("Fix 2: stop_duplicate_processes has platform guard", "sys.platform == 'win32'" in foxfinder_src)
+test("Fix 2: README mentions Windows 10+", "Windows 10+" in readme)
+test("Fix 2: README has cross-platform note", "cross-platform" in readme.lower() or "Cross-platform" in readme)
+
+# Fix 3: No requests dependency
+test("Fix 3: No 'import requests' in foxfinder.py", "import requests" not in foxfinder_src)
+# Check no requests.Session in actual code (ignore changelog comments)
+foxfinder_code_lines = [l for l in foxfinder_src.split('\n') if not l.strip().startswith('#')]
+foxfinder_code_only = '\n'.join(foxfinder_code_lines)
+test("Fix 3: No 'requests.Session' in foxfinder.py code", "requests.Session" not in foxfinder_code_only)
+test("Fix 3: No 'requests.RequestException' in foxfinder.py", "requests.RequestException" not in foxfinder_src)
+test("Fix 3: No get_http_session function", "def get_http_session" not in foxfinder_src)
+test("Fix 3: No reset_http_session function", "def reset_http_session" not in foxfinder_src)
+test("Fix 3: No _http_session global", "_http_session:" not in foxfinder_src)
+test("Fix 3: requirements.txt has no requests", "requests" not in requirements_src)
+test("Fix 3: ebay_common check_internet uses urllib", "urllib.request" in ebay_common_src)
+test("Fix 3: ebay_common check_internet no requests import", "import requests" not in ebay_common_src)
+test("Fix 3: foxfinder imports urllib.error", "import urllib.error" in foxfinder_src)
+
+# Fix 4: Run log in separate file
+from ebay_common import RUN_LOG_FILE
+test("Fix 4: RUN_LOG_FILE defined in ebay_common", RUN_LOG_FILE is not None)
+test("Fix 4: RUN_LOG_FILE is foxfinder_run_log.json", RUN_LOG_FILE.name == "foxfinder_run_log.json")
+test("Fix 4: RUN_LOG_FILE imported in foxfinder", "RUN_LOG_FILE" in foxfinder_src)
+test("Fix 4: update_run_log uses RUN_LOG_FILE", "RUN_LOG_FILE" in foxfinder_src.split("def update_run_log")[1].split("\ndef ")[0])
+test("Fix 4: update_run_log does NOT write CONFIG_FILE", "CONFIG_FILE" not in foxfinder_src.split("def update_run_log")[1].split("\ndef ")[0])
+test("Fix 4: .gitignore has foxfinder_run_log.json", "foxfinder_run_log.json" in gitignore_src)
+
+# Fix 4: Functional test - update_run_log writes to separate file
+from foxfinder import update_run_log
+with tempfile.TemporaryDirectory() as tmpdir:
+    import foxfinder as ff_mod
+    import ebay_common as ec_mod
+    # Temporarily redirect RUN_LOG_FILE
+    orig_rlf = ff_mod.RUN_LOG_FILE
+    test_rlf = Path(tmpdir) / "foxfinder_run_log.json"
+    ff_mod.RUN_LOG_FILE = test_rlf
+    try:
+        update_run_log()
+        test("Fix 4: update_run_log creates run log file", test_rlf.exists())
+        if test_rlf.exists():
+            rl_data = json.loads(test_rlf.read_text())
+            test("Fix 4: run log has last_run", "last_run" in rl_data)
+            test("Fix 4: run log has alerts_sent", "alerts_sent" in rl_data)
+    except Exception as e:
+        test("Fix 4: update_run_log functional test", False, str(e))
+    finally:
+        ff_mod.RUN_LOG_FILE = orig_rlf
+
+# Fix 5: No sys.path hack
+test("Fix 5: No parent.parent sys.path hack", "parent.parent" not in foxfinder_src)
+test("Fix 5: No _parent_dir variable", "_parent_dir" not in foxfinder_src)
+
+# Fix 6: Python version guard at top
+# The guard should appear before the main docstring
+lines = foxfinder_src.split('\n')
+version_guard_found = False
+docstring_found = False
+for line in lines:
+    stripped = line.strip()
+    if stripped.startswith('"""') and not version_guard_found:
+        docstring_found = True
+    if 'sys.version_info' in stripped and '3, 9' in stripped:
+        version_guard_found = True
+        break
+test("Fix 6: Python version guard exists", version_guard_found)
+test("Fix 6: Version guard is before docstring", version_guard_found and not docstring_found,
+     "Guard should appear before the module docstring")
+
+# Verify sys is imported before version check (at top of file)
+first_10_lines = '\n'.join(lines[:10])
+test("Fix 6: 'import sys' near top of file", "import sys" in first_10_lines)
+
+
+# ============================================================
 # FINAL RESULTS
 # ============================================================
 print(f"\n{'='*60}")

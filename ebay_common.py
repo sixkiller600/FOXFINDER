@@ -64,6 +64,9 @@ SHUTDOWN_FILE = SCRIPT_DIR / ".shutdown_requested"
 HEARTBEAT_FILE = SCRIPT_DIR / ".heartbeat"
 LOCK_FILE = SCRIPT_DIR / ".ebay.lock"
 
+# Run log (operational tracking, separate from user config)
+RUN_LOG_FILE = SCRIPT_DIR / "foxfinder_run_log.json"
+
 # Update Checker
 API_UPDATE_CHECK_FILE = SCRIPT_DIR / ".last_api_update_check"
 API_UPDATE_ALERT_FILE = SCRIPT_DIR / "API_UPDATE_NOTICE.txt"
@@ -767,13 +770,15 @@ def load_config() -> Dict[str, Any]:
 
 def check_internet() -> bool:
     """Connectivity check using eBay API endpoint."""
-    import requests
+    import urllib.request
+    import urllib.error
 
     try:
         # Only contact eBay - this app should only communicate with eBay
-        requests.head("https://api.ebay.com", timeout=5)
+        req = urllib.request.Request("https://api.ebay.com", method="HEAD")
+        urllib.request.urlopen(req, timeout=5)
         return True
-    except (requests.RequestException, OSError):
+    except (urllib.error.URLError, OSError):
         return False
 
 

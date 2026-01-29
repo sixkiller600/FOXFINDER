@@ -1,4 +1,11 @@
 #!/usr/bin/env python3
+import sys
+if sys.version_info < (3, 9):
+    print("FoxFinder requires Python 3.9 or later.")
+    print(f"You are running Python {sys.version_info.major}.{sys.version_info.minor}")
+    print("Download the latest Python from https://www.python.org/downloads/")
+    sys.exit(1)
+
 """
 FoxFinder - eBay Deal Notification Service
 Uses official eBay Browse API with EPN (eBay Partner Network) integration.
@@ -66,9 +73,9 @@ import smtplib
 import imaplib
 import urllib.request
 import urllib.parse
+import urllib.error
 import subprocess
 import random
-import requests
 from datetime import datetime, timezone, timedelta
 from email.mime.text import MIMEText
 from email.mime.multipart import MIMEMultipart
@@ -77,7 +84,7 @@ from typing import Dict, List, Any, Optional, Tuple
 
 from ebay_common import (
     SCRIPT_DIR, CONFIG_FILE, SEEN_FILE, LOG_FILE, TOKEN_FILE, RATE_FILE,
-    SHUTDOWN_FILE, HEARTBEAT_FILE, LOCK_FILE,
+    SHUTDOWN_FILE, HEARTBEAT_FILE, LOCK_FILE, RUN_LOG_FILE,
     API_UPDATE_CHECK_FILE, API_UPDATE_ALERT_FILE, EMAIL_FAILURES_FILE,
     EBAY_API_BASE, EBAY_API_VERSION, DAILY_CALL_LIMIT, MIN_INTERVAL_SECONDS,
     log, rotate_logs, update_heartbeat, read_heartbeat,
@@ -90,10 +97,6 @@ from ebay_common import (
     load_config, check_internet, get_smtp_config,
 )
 
-import sys
-_parent_dir = str(Path(__file__).resolve().parent.parent)
-if _parent_dir not in sys.path:
-    sys.path.insert(0, _parent_dir)
 try:
     from email_templates import get_listing_html, get_alert_html, get_subject_line
     _EMAIL_TEMPLATES_LOADED = True
@@ -130,45 +133,6 @@ recovery_state = {
 MAX_EMAIL_FAILURES_BEFORE_ALERT = 5
 EMAIL_CIRCUIT_BREAKER_THRESHOLD = 10
 EMAIL_RETRY_INTERVAL_CYCLES = 10
-
-_http_session: Optional[requests.Session] = None
-_http_session_created: Optional[float] = None
-HTTP_SESSION_MAX_AGE_SECONDS = 43200
-
-
-def get_http_session() -> requests.Session:
-    global _http_session, _http_session_created
-    now = time.time()
-    should_recreate = (
-        _http_session is None or
-        _http_session_created is None or
-        (now - _http_session_created) > HTTP_SESSION_MAX_AGE_SECONDS
-    )
-    if should_recreate:
-        if _http_session is not None:
-            try:
-                _http_session.close()
-                log("HTTP session recycled (age limit reached)")
-            except Exception:
-                pass
-        _http_session = requests.Session()
-        _http_session.headers.update({
-            "User-Agent": f"FoxFinder/{VERSION} (eBay-Browse-API-Client)",
-            "Accept": "application/json",
-        })
-        _http_session_created = now
-    return _http_session
-
-
-def reset_http_session():
-    global _http_session, _http_session_created
-    if _http_session is not None:
-        try:
-            _http_session.close()
-        except Exception:
-            pass
-    _http_session = None
-    _http_session_created = None
 
 
 def get_email_failure_count() -> int:
@@ -235,15 +199,14 @@ def check_api_updates() -> None:
         log("Running monthly eBay API status check...")
         notices = []
         check_succeeded = False
-        session = get_http_session()
         for attempt in range(3):
             try:
-                resp = session.get(
+                req = urllib.request.Request(
                     "https://developer.ebay.com/api-docs/static/api-deprecation-status.html",
-                    timeout=API_TIMEOUT_SECONDS
+                    headers={"User-Agent": f"FoxFinder/{VERSION}"}
                 )
-                if resp.status_code == 200:
-                    content = resp.text.lower()
+                with urllib.request.urlopen(req, timeout=API_TIMEOUT_SECONDS) as resp:
+                    content = resp.read().decode('utf-8', errors='replace').lower()
                     if "browse api" in content and ("deprecat" in content or "sunset" in content):
                         if "v1" in content or EBAY_API_VERSION in content:
                             notices.append(
@@ -252,27 +215,33 @@ def check_api_updates() -> None:
                             )
                     check_succeeded = True
                     break
-            except (requests.RequestException, OSError) as e:
+            except (urllib.error.URLError, OSError) as e:
                 if attempt < 2:
                     log(f"Deprecation page check attempt {attempt + 1} failed: {e}")
-                    reset_http_session()
                     interruptible_sleep(5 * (attempt + 1))
                 else:
                     log(f"Deprecation page check failed after 3 attempts: {e}")
         for attempt in range(3):
             try:
-                resp = session.get(f"{EBAY_API_BASE}/buy/browse/v1", timeout=10)
-                if resp.status_code == 410:
+                req = urllib.request.Request(
+                    f"{EBAY_API_BASE}/buy/browse/v1",
+                    headers={"User-Agent": f"FoxFinder/{VERSION}"}
+                )
+                with urllib.request.urlopen(req, timeout=10) as resp:
+                    pass  # 200 OK means API is alive
+                check_succeeded = True
+                break
+            except urllib.error.HTTPError as e:
+                if e.code == 410:
                     notices.append(
                         "[EBAY BROWSE API] API endpoint returned 410 GONE - may be deprecated!\n"
                         "   Urgent: Check eBay developer portal immediately."
                     )
                 check_succeeded = True
                 break
-            except (requests.RequestException, OSError) as e:
+            except (urllib.error.URLError, OSError) as e:
                 if attempt < 2:
                     log(f"API health check attempt {attempt + 1} failed: {e}")
-                    reset_http_session()
                     interruptible_sleep(5 * (attempt + 1))
                 else:
                     log(f"API health check failed after 3 attempts: {e}")
@@ -347,6 +316,11 @@ def cleanup_stale_lock() -> None:
         lock_age = time.time() - LOCK_FILE.stat().st_mtime
         if lock_age < STALE_LOCK_AGE_SECONDS:
             return
+        if sys.platform != 'win32':
+            # tasklist/taskkill are Windows-only; skip process check on other platforms
+            LOCK_FILE.unlink()
+            log("Cleaned up stale lock file (non-Windows: age exceeded)")
+            return
         try:
             old_pid = int(LOCK_FILE.read_text().strip())
             result = subprocess.run(['tasklist', '/FI', f'PID eq {old_pid}', '/NH'],
@@ -364,7 +338,7 @@ def stop_duplicate_processes() -> int:
     lock_file = LOCK_FILE
     current_pid = os.getpid()
     try:
-        if lock_file.exists():
+        if lock_file.exists() and sys.platform == 'win32':
             try:
                 old_pid = int(lock_file.read_text().strip())
                 if old_pid != current_pid:
@@ -385,25 +359,31 @@ def update_run_log(increment_alerts: bool = False) -> None:
     Update internal run log for operational tracking (NOT market statistics).
 
     This tracks when the app last ran and how many notifications were sent.
+    Written to a separate file (foxfinder_run_log.json) to keep the user's
+    config file clean and read-only from the app's perspective.
+
     This is purely for the user's own operational awareness - NOT for:
     - Market research or price analysis
     - Category statistics or aggregation
     - Any data that would compete with eBay Terapeak
     """
-    tmp_file = CONFIG_FILE.with_suffix('.tmp')
+    tmp_file = RUN_LOG_FILE.with_suffix('.tmp')
     try:
-        with open(CONFIG_FILE, 'r', encoding='utf-8-sig') as f:
-            config = json.load(f)
-        if "_run_log" not in config:
-            config["_run_log"] = {"_note": "Internal run tracking only", "last_run": None, "alerts_sent": 0, "last_alert": None}
+        run_log = {"_note": "Internal run tracking only", "last_run": None, "alerts_sent": 0, "last_alert": None}
+        if RUN_LOG_FILE.exists():
+            try:
+                with open(RUN_LOG_FILE, 'r', encoding='utf-8') as f:
+                    run_log = json.load(f)
+            except (json.JSONDecodeError, IOError):
+                pass
         now = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
-        config["_run_log"]["last_run"] = now
+        run_log["last_run"] = now
         if increment_alerts:
-            config["_run_log"]["alerts_sent"] = config["_run_log"].get("alerts_sent", 0) + 1
-            config["_run_log"]["last_alert"] = now
+            run_log["alerts_sent"] = run_log.get("alerts_sent", 0) + 1
+            run_log["last_alert"] = now
         with open(tmp_file, 'w', encoding='utf-8') as f:
-            json.dump(config, f, indent=4)
-        tmp_file.replace(CONFIG_FILE)
+            json.dump(run_log, f, indent=4)
+        tmp_file.replace(RUN_LOG_FILE)
     except (IOError, json.JSONDecodeError, OSError) as e:
         log(f"Run log update failed: {e}")
         try:
@@ -1271,7 +1251,8 @@ def run_foxfinder() -> None:
         for err in errors:
             log(f"  - {err}")
         log("")
-        log("Please run USER_SETTINGS.py to complete your configuration.")
+        log("Please copy ebay_config_template.json to ebay_config.json and fill in your credentials.")
+        log("See README.md for setup instructions.")
         log("=" * 50)
         return
     log("Config validation passed")

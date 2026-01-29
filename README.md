@@ -22,9 +22,12 @@ FoxFinder is a personal deal notification application that uses the **official e
 ## Requirements
 
 - Python 3.9+
+- Windows 10+ (for control scripts and process management)
 - eBay Developer Account ([developer.ebay.com](https://developer.ebay.com))
 - eBay Partner Network Account (recommended for production access)
 - Gmail/SMTP account for notifications
+
+> **Cross-platform note:** `python foxfinder.py` works on any OS. The BAT/PS1 control scripts (`FoxFinder ON.bat`, `FoxFinder OFF.bat`, `Status Dashboard.bat`) and process management helpers (`cleanup_stale_lock`, `stop_duplicate_processes`) are Windows-specific. On Linux/macOS these helpers gracefully skip instead of crashing.
 
 ## Quick Start
 

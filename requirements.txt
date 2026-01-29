@@ -2,9 +2,6 @@
 # Requires: Python 3.9+ (download from python.org)
 # Install: pip install -r requirements.txt
 
-# === HTTP Requests ===
-requests>=2.31.0
-
 # === System Monitoring ===
 psutil>=5.9.0
 
