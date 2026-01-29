@@ -20,39 +20,7 @@ For more information, see README.md and PRIVACY_POLICY.md
 
 VERSION = "4.9.0"
 __version__ = VERSION
-# v4.9.0: eBay Growth Check compliance improvements:
-#         - Add contextualLocation to X-EBAY-C-ENDUSERCTX header for shipping accuracy
-#         - Add itemEndDate check to skip expired listings (eBay data freshness requirement)
-#         - Add estimatedAvailabilityStatus check to skip unavailable items
-#         - Strengthen price drop feature documentation for compliance clarity
-# v4.8.3: Rename update_statistics -> update_run_log to avoid "statistics" term
-#         (eBay prohibits "site-wide statistics" - clarify this is just run logging)
-# v4.8.2: CRITICAL FIX - API filter must use backwards compatibility logic
-#         - buyingOptions:{FIXED_PRICE} filter now respects buy_it_now_only legacy config
-#         - Without this fix, auctions were filtered out at API level before code could see them
-# v4.8.1: CRITICAL FIX - Pass condition field to email templates (eBay requirement)
-#         - Add condition to new_listings and price_drops dicts
-#         - Add backwards compatibility for buy_it_now_only config field
-# v4.8.0: eBay Growth Check compliance fixes:
-#         - Default to FIXED_PRICE (eBay requires this for Buy API partners)
-#         - Add HTTP 429/503 retry handling to search_ebay()
-#         - Add EPN Campaign ID validation (10 digits)
-#         - Add pagination resilience (handle varying result counts)
-#         - Document newlyListed sort as business requirement
-# v4.7.5: Fix missing UTF-8 encoding in token file I/O for consistency
-# v4.7.4: Reliability quick wins - dynamic reset wait, HTTP 429/503 retry, validation check, email visibility
-# v4.7.1: CRITICAL FIX - get_minutes_since_reset() call signature
-# v4.7.0: Post-reset anomaly detection (Proactive Retry) to fix 1h hangs after API sync lag
-# v4.6.8: Add requests.Session for connection pooling (2-3x faster API checks)
-# v4.6.7: Increase search results limit 50→150 to reduce staggered alerts after downtime
-# v4.6.5: Fix BCC privacy bug - removed exposed Bcc header
-# v4.6.4: Multi-recipient email support with BCC privacy
-# v4.6.3: Fix email template import - was using fallback that outputs raw dicts
-# v4.6.2: Fix HTML email rendering - add UTF-8 charset to MIMEText
-# v4.6.1: Robustness hardening - timeout constants, temp cleanup, specific exceptions
-# v4.6.0: Price drop tracking - alerts when seen items drop into search criteria
-# v4.5.0: Reliability hardening - HTTP retry, token retry, API validation, memory cap
-# v4.4.0: Robust rate limit sync - post-reset retry, sanity validation, auto-recovery
+# See CHANGELOG.md for full version history.
 
 # --- Constants ---
 ERROR_RETRY_INTERVAL = 60
@@ -1419,7 +1387,82 @@ def run_foxfinder() -> None:
                 return
 
 
+def run_validate() -> int:
+    """Validate configuration and environment without running the service."""
+    print(f"FoxFinder v{VERSION} - Configuration Validator")
+    print(f"Python {sys.version_info.major}.{sys.version_info.minor}.{sys.version_info.micro}")
+    print("=" * 50)
+
+    # Check config file exists
+    if not CONFIG_FILE.exists():
+        print(f"FAIL: Config file not found: {CONFIG_FILE}")
+        print("  -> Copy ebay_config_template.json to ebay_config.json")
+        return 1
+    print(f"OK:   Config file: {CONFIG_FILE}")
+
+    # Load and validate config
+    config = load_config()
+    if not config:
+        print("FAIL: Config file is not valid JSON")
+        return 1
+    print("OK:   Config file is valid JSON")
+
+    is_valid, errors = validate_config(config)
+    if not is_valid:
+        print(f"FAIL: Config validation ({len(errors)} error(s)):")
+        for err in errors:
+            print(f"  - {err}")
+        return 1
+    print("OK:   Config validation passed")
+
+    # Summarize searches
+    searches = config.get("searches", [])
+    enabled = [s for s in searches if s.get("enabled", True)]
+    print(f"OK:   {len(enabled)}/{len(searches)} searches enabled")
+
+    # Check EPN
+    epn = config.get("api_credentials", {}).get("epn_campaign_id", "")
+    if epn:
+        print(f"OK:   EPN Campaign ID configured ({epn[:4]}...)")
+    else:
+        print("INFO: EPN Campaign ID not set (optional)")
+
+    # Check email templates
+    if _EMAIL_TEMPLATES_LOADED:
+        print("OK:   Email templates loaded")
+    else:
+        print("WARN: Email templates NOT loaded (using fallback)")
+
+    # Check connectivity
+    print("      Checking eBay API connectivity...")
+    if check_internet():
+        print("OK:   eBay API reachable")
+    else:
+        print("WARN: eBay API not reachable (no internet?)")
+
+    # Check runtime files
+    print("=" * 50)
+    print("Runtime files:")
+    for name, path in [
+        ("Seen items", SEEN_FILE),
+        ("Rate state", RATE_FILE),
+        ("Token", TOKEN_FILE),
+        ("Heartbeat", HEARTBEAT_FILE),
+        ("Lock", LOCK_FILE),
+    ]:
+        if path.exists():
+            print(f"  EXISTS: {name} ({path.name})")
+        else:
+            print(f"  ABSENT: {name} ({path.name})")
+
+    print("=" * 50)
+    print("RESULT: Configuration is valid. Ready to run.")
+    return 0
+
+
 if __name__ == "__main__":
+    if len(sys.argv) > 1 and sys.argv[1] in ("--validate", "-v"):
+        sys.exit(run_validate())
     try:
         run_foxfinder()
     except KeyboardInterrupt:
