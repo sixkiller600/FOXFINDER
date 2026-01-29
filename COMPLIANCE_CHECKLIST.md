@@ -3,7 +3,7 @@
 **Application:** FoxFinder eBay Deal Notification Service
 **Version:** 1.2.0 (v4.9.0 code)
 **API Used:** eBay Browse API (Buy APIs)
-**Last Verified:** January 28, 2026
+**Last Verified:** January 29, 2026
 
 ---
 
@@ -155,4 +155,4 @@ python -m py_compile foxfinder.py ebay_common.py email_templates.py
 
 ---
 
-*Compliance verified January 28, 2026*
+*Compliance verified January 29, 2026*
