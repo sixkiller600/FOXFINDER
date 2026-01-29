@@ -2,9 +2,9 @@
 
 **Personal eBay Deal Notification Service using the Official Browse API**
 
-FoxFinder is a personal deal notification application that uses the **official eBay Browse API** to search for items matching your criteria and send email notifications when new deals appear. Built with eBay API compliance in mind.
+FoxFinder monitors eBay for items matching your criteria and sends email notifications when new deals appear. Every notification links buyers directly to eBay through the **eBay Partner Network (EPN)**, driving traffic and purchases to the eBay marketplace.
 
-> **Compliance Note:** FoxFinder is designed from the ground up to comply with the eBay API License Agreement, eBay Developer Program policies, and eBay Partner Network Terms. See [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md) for full details.
+Built on the **official eBay Browse API** with full compliance to the eBay API License Agreement, eBay Developer Program policies, and eBay Partner Network Terms. See [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md) for full details.
 
 ## Features
 
@@ -22,12 +22,11 @@ FoxFinder is a personal deal notification application that uses the **official e
 ## Requirements
 
 - Python 3.9+
-- Windows 10+ (for control scripts and process management)
 - eBay Developer Account ([developer.ebay.com](https://developer.ebay.com))
 - eBay Partner Network Account (recommended for production access)
 - Gmail/SMTP account for notifications
 
-> **Cross-platform note:** `python foxfinder.py` works on any OS. The BAT/PS1 control scripts (`FoxFinder ON.bat`, `FoxFinder OFF.bat`, `Status Dashboard.bat`) and process management helpers (`cleanup_stale_lock`, `stop_duplicate_processes`) are Windows-specific. On Linux/macOS these helpers gracefully skip instead of crashing.
+> **Note:** `python foxfinder.py` runs on any OS. The included BAT/PS1 control scripts are Windows convenience wrappers.
 
 ## Quick Start
 
@@ -63,7 +62,7 @@ Edit `ebay_config.json`:
     },
     "email": {
         "sender": "your.email@gmail.com",
-        "password": "your-app-password",
+        "password": "xxxx xxxx xxxx xxxx",
         "recipient": "notify@example.com"
     },
     "searches": [
@@ -77,7 +76,15 @@ Edit `ebay_config.json`:
 }
 ```
 
-### 4. Run
+### 4. Validate Your Setup
+
+```bash
+python foxfinder.py --validate
+```
+
+This checks your config file, verifies eBay API connectivity, and confirms everything is ready — without making any API calls.
+
+### 5. Run
 
 ```bash
 python foxfinder.py
@@ -126,6 +133,13 @@ Or use the provided control scripts:
 | `enabled` | boolean | true | Enable/disable this search |
 
 > **Note:** Per eBay Growth Check requirements, FoxFinder defaults to **Buy It Now (FIXED_PRICE) items only**. Set `"include_auctions": true` to also see auction listings.
+
+## How FoxFinder Benefits the eBay Ecosystem
+
+- **Drives buyer traffic to eBay** — Every notification links directly to the eBay listing
+- **Generates EPN revenue** — All links include affiliate tracking via `itemAffiliateWebUrl`
+- **Promotes eBay features** — Emails include Watchlist links, Today's Deals, Trending, and eBay Mobile App links
+- **Encourages purchases** — Price drop alerts convert browsers into buyers by surfacing deals at the right moment
 
 ## eBay API Compliance
 
@@ -234,4 +248,4 @@ FoxFinder is an independent personal tool and is not affiliated with, endorsed b
 
 ---
 
-**Questions?** Open an issue or check the [eBay Developer Forums](https://community.ebay.com/t5/Developer-Forums/ct-p/developergroup).
+**Questions?** Open an [issue](https://github.com/sixkiller600/FOXFINDER/issues) or check the [eBay Developer Forums](https://developer.ebay.com/forums).

@@ -788,8 +788,8 @@ test("Fix 1: README reference in config error", 'See README.md for setup instruc
 # Fix 2: Windows platform guard
 test("Fix 2: cleanup_stale_lock has platform guard", "sys.platform != 'win32'" in foxfinder_src or "sys.platform == 'win32'" in foxfinder_src)
 test("Fix 2: stop_duplicate_processes has platform guard", "sys.platform == 'win32'" in foxfinder_src)
-test("Fix 2: README mentions Windows 10+", "Windows 10+" in readme)
-test("Fix 2: README has cross-platform note", "cross-platform" in readme.lower() or "Cross-platform" in readme)
+test("Fix 2: README notes OS compatibility", "any OS" in readme or "Windows 10+" in readme)
+test("Fix 2: README mentions BAT/PS1 scripts", "BAT" in readme or "control scripts" in readme)
 
 # Fix 3: No requests dependency
 test("Fix 3: No 'import requests' in foxfinder.py", "import requests" not in foxfinder_src)
