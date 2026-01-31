@@ -2,7 +2,7 @@
 
 **Personal eBay Deal Notification Service using the Official Browse API**
 
-FoxFinder monitors eBay for items matching your criteria and sends email notifications when new deals appear. Every notification links buyers directly to eBay through the **eBay Partner Network (EPN)**, driving traffic and purchases to the eBay marketplace.
+FoxFinder searches eBay for items matching your criteria and sends email notifications when new deals appear. Every notification links buyers directly to eBay through the **eBay Partner Network (EPN)**, driving traffic and purchases to the eBay marketplace.
 
 Built on the **official eBay Browse API** with full compliance to the eBay API License Agreement, eBay Developer Program policies, and eBay Partner Network Terms. See [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md) for full details.
 

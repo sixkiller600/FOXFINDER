@@ -904,8 +904,8 @@ with tempfile.TemporaryDirectory() as tmpdir:
     finally:
         ff_mod.RUN_LOG_FILE = orig_rlf
 
-# Fix 5: No sys.path hack
-test("Fix 5: No parent.parent sys.path hack", "parent.parent" not in foxfinder_src)
+# Fix 5: No sys.path workaround
+test("Fix 5: No parent.parent sys.path workaround", "parent.parent" not in foxfinder_src)
 test("Fix 5: No _parent_dir variable", "_parent_dir" not in foxfinder_src)
 
 # Fix 6: Python version guard at top
