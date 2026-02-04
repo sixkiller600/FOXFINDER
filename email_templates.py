@@ -16,7 +16,8 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.7.0"
+__version__ = "2.7.1"
+# v2.7.1: Fix opt-out notice for service model clients
 # v2.7.0: Israeli Anti-Spam Law (Amendment 40) compliance
 #         - Add "פרסומת" prefix for third-party recipients
 #         - Add affiliate disclosure and opt-out instructions
@@ -60,7 +61,7 @@ EBAY_USER_AGREEMENT = "https://www.ebay.com/help/policies/member-behaviour-polic
 # These are only added when sending to third-party recipients (not self-notifications)
 ISRAELI_AD_PREFIX = "פרסומת"  # Hebrew for "Advertisement" - required by Israeli law
 AFFILIATE_DISCLOSURE = "This email contains affiliate links. We may earn a commission from qualifying purchases."
-OPT_OUT_NOTICE = "To stop receiving notifications: disable searches in your config or remove your email from recipients."
+OPT_OUT_NOTICE = "To stop receiving notifications, reply to this email or contact the service operator."
 
 # Operation Mode Detection
 # FoxFinder supports two modes:

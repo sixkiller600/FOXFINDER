@@ -19,8 +19,9 @@ Compliant with:
 For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.10.0"
+VERSION = "4.10.1"
 __version__ = VERSION
+# v4.10.1: Fix opt-out notice for service model clients
 # v4.10.0: Israeli Anti-Spam Law (Amendment 40) compliance
 #          - Self-notifications exempt (sender == recipient)
 #          - Third-party recipients get "פרסומת" prefix + compliance footer

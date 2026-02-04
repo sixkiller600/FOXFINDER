@@ -6,6 +6,17 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.10.1] - 2026-02-04
+
+### Fixed
+- Opt-out notice now appropriate for service model clients: "reply to this email or contact the service operator"
+- Previous wording referenced config access which service clients don't have
+
+### Changed
+- email_templates.py version bumped to 2.7.1
+
+---
+
 ## [4.10.0] - 2026-02-04
 
 ### Added
