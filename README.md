@@ -1,10 +1,49 @@
 # FoxFinder
 
-**Personal eBay Deal Notification Service using the Official Browse API**
+**eBay Deal Notification Service using the Official Browse API**
 
-FoxFinder searches eBay for items matching your criteria and sends email notifications when new deals appear. Every notification links buyers directly to eBay through the **eBay Partner Network (EPN)**, driving traffic and purchases to the eBay marketplace.
+FoxFinder searches eBay for items matching configured criteria and sends email notifications when new deals appear. Every notification links buyers directly to eBay through the **eBay Partner Network (EPN)**, driving traffic and purchases to the eBay marketplace.
 
-Built on the **official eBay Browse API** with full compliance to the eBay API License Agreement, eBay Developer Program policies, and eBay Partner Network Terms. See [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md) for full details.
+Built on the **official eBay Browse API** with full compliance to:
+- eBay API License Agreement and Developer Program policies
+- eBay Partner Network Terms
+- **Israeli Anti-Spam Law (Amendment 40)**
+- **Israeli Privacy Protection Law (PPL) 5741-1981**
+- GDPR and CCPA
+
+See [COMPLIANCE_CHECKLIST.md](COMPLIANCE_CHECKLIST.md) for full details.
+
+---
+
+## Operation Modes
+
+FoxFinder supports two operation modes:
+
+### 1. Personal Use (Self-Notification)
+- Operator runs FoxFinder for their own deal hunting
+- Sender and recipient are the same person
+- **Exempt from commercial compliance** under Israeli law (personal use)
+- API credentials held by the user
+
+### 2. Service Model (Client Notifications)
+- Operator provides notification service to clients
+- **Operator holds the eBay API credentials** (clients do not need eBay Developer accounts)
+- Clients receive notifications via the operator's service
+- **Full Israeli Anti-Spam Law compliance** automatically applied:
+  - Subject lines prefixed with "פרסומת" (Advertisement)
+  - Affiliate disclosure in footer
+  - Opt-out instructions included
+- **User subscription via manual one-on-one registration** with the operator
+- Each client personally contacts the operator to subscribe
+- Operator maintains consent records for all subscribers
+
+| Feature | Personal Use | Service Model |
+|---------|--------------|---------------|
+| API credentials | User's own | Operator's |
+| Recipients | Self only | Clients |
+| Israeli compliance | Exempt | Full |
+| Subject prefix | None | "פרסומת" |
+| Consent method | Implicit (self) | Manual registration |
 
 ## Features
 

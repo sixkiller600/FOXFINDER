@@ -1,17 +1,34 @@
 # FoxFinder Privacy Policy
 
-**Last Updated:** January 2026
-**Version:** 1.1.0
+**Last Updated:** February 2026
+**Version:** 2.0.0
 
 ## Overview
 
-FoxFinder is a personal eBay deal notification application that uses the **official eBay Browse API** exclusively to search for items matching your configured criteria. This application operates in full compliance with the eBay API License Agreement and eBay Partner Network Terms. This privacy policy explains what data is collected, how it's used, and your rights regarding that data.
+FoxFinder is an eBay deal notification application that uses the **official eBay Browse API** exclusively to search for items matching configured criteria. This application operates in full compliance with the eBay API License Agreement, eBay Partner Network Terms, and applicable privacy laws including Israeli law. This privacy policy explains what data is collected, how it's used, and your rights regarding that data.
 
 **This policy is designed to be consistent with the [eBay Privacy Notice](https://www.ebay.com/help/policies/member-behaviour-policies/user-privacy-notice-privacy-policy?id=4260).**
 
+## Operation Modes
+
+FoxFinder operates in two modes:
+
+### Personal Use Mode
+When the operator uses FoxFinder for their own deal notifications (sender and recipient are the same person), it functions as a personal tool exempt from commercial message regulations under Israeli law.
+
+### Service Mode
+When the operator provides notification services to clients:
+- **The operator holds the eBay API credentials** - clients do not need their own eBay Developer accounts
+- Clients subscribe through **manual one-on-one registration** with the operator
+- Each client personally contacts the operator to subscribe (email, phone, or in-person)
+- The operator maintains records of subscriber consent
+- Full Israeli Anti-Spam Law compliance is automatically applied to all client notifications
+
 ## Data Controller
 
-This application is operated as a personal tool. For privacy inquiries, contact the application operator directly.
+**Personal Use:** The individual operating the application for themselves.
+
+**Service Mode:** The service operator who holds the eBay API credentials and manages client subscriptions. For privacy inquiries, contact the service operator directly.
 
 ## Data We Collect
 
@@ -48,6 +65,25 @@ Locally stored configuration includes:
 
 **Retention:** Stored locally. Deleted upon application removal.
 
+## Subscriber Data (Service Mode Only)
+
+When operating as a notification service for clients, the operator maintains:
+
+### Subscriber Information
+- **Email addresses** of subscribed clients (for notification delivery)
+- **Consent records** documenting when and how each subscriber opted in
+- **Search preferences** configured for each subscriber
+
+**Collection Method:** Manual one-on-one registration. Subscribers personally contact the operator to request service. No automated sign-up or electronic registration forms.
+
+**Consent Documentation:** The operator maintains records showing:
+- Date of subscription request
+- Method of contact (email, phone, in-person)
+- Explicit consent to receive commercial notifications
+- Acknowledgment of affiliate link disclosure
+
+**Retention:** Subscriber data is retained until the subscriber opts out or requests deletion.
+
 ## Data We Do NOT Collect
 
 FoxFinder does **NOT** collect, store, or process:
@@ -58,6 +94,7 @@ FoxFinder does **NOT** collect, store, or process:
 - Seller performance statistics
 - Market research data (average prices, category statistics)
 - Any data for machine learning, AI training, or algorithmic modeling
+- Automated tracking of subscriber behavior or click patterns
 
 ## Prohibited Data Uses
 
@@ -143,6 +180,63 @@ This application is designed to comply with:
 - eBay Partner Network Agreement (when applicable)
 - GDPR (General Data Protection Regulation)
 - CCPA (California Consumer Privacy Act)
+- **Israeli Anti-Spam Law (Amendment 40 to Communications Law, 1982)**
+- **Israeli Privacy Protection Law (PPL) 5741-1981**
+
+---
+
+## Israeli Law Compliance
+
+### Amendment 40 (Anti-Spam Law) Compliance
+
+FoxFinder complies with Israeli Amendment 40 to the Communications (Broadcasting and Telecommunications) Law, 1982, which regulates commercial electronic messages.
+
+**Personal Use Exemption:**
+When the email sender and recipient are the same person (self-notification), the application operates as a personal tool and is **exempt from commercial message requirements**. This is because:
+- The "recipient" has implicitly consented by configuring the application
+- No third party receives unsolicited commercial messages
+- The application serves as a personal notification tool, not marketing software
+
+**Service Mode - Full Compliance:**
+When operating as a service for clients, FoxFinder implements full Israeli Anti-Spam Law compliance:
+
+**Consent Mechanism:**
+- **Manual one-on-one registration** - Each subscriber personally contacts the operator
+- No automated or electronic sign-up process
+- Operator documents consent for each subscriber
+- Subscribers can opt out at any time by contacting the operator
+
+**Message Compliance:**
+When sending to client recipients, FoxFinder automatically applies:
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Subject line marking | Prefix "פרסומת" (Advertisement) added |
+| Advertiser identification | Sender email clearly identified |
+| Affiliate disclosure | "This email contains affiliate links" notice |
+| Opt-out mechanism | Clear instructions to disable notifications |
+| Content requirements | eBay attribution and legal links included |
+
+**Penalties Awareness:**
+Israeli law provides for fines up to 202,000 NIS for non-compliant commercial messages and allows individuals to claim 1,000 NIS per message without proving damages.
+
+### Privacy Protection Law (PPL) 5741-1981 Compliance
+
+FoxFinder complies with Israel's Privacy Protection Law:
+
+| Requirement | Implementation |
+|-------------|----------------|
+| Data minimization | Only item data stored, no personal information |
+| Purpose limitation | Data used only for deal notifications |
+| Data retention limits | 14-day automatic deletion |
+| Right of access | User can view all local JSON files |
+| Right to deletion | Clear deletion instructions provided |
+| Security measures | HTTPS only, local storage, atomic writes |
+| No database registration required | Personal use tool with <10,000 records |
+
+### EU Adequacy Status
+
+Israel maintains EU adequacy status (reconfirmed January 2024), meaning data transfers from EU to Israel meet GDPR standards. FoxFinder's data handling practices are consistent with both Israeli and EU data protection requirements.
 
 ## Contact
 

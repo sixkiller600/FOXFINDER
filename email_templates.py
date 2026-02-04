@@ -10,12 +10,17 @@ Features:
 - Dual timezone display (IL/US Pacific)
 - Item age indicators
 - Price formatting with proper currency symbols
+- Israeli Anti-Spam Law (Amendment 40) compliance for third-party recipients
 """
 import html
 import re
 from datetime import datetime
 
-__version__ = "2.6.0"
+__version__ = "2.7.0"
+# v2.7.0: Israeli Anti-Spam Law (Amendment 40) compliance
+#         - Add "פרסומת" prefix for third-party recipients
+#         - Add affiliate disclosure and opt-out instructions
+#         - Self-notification exemption (sender == recipient)
 # v2.6.0: Add thumbnail, shipping cost, seller feedback to listing rows
 # v2.5.0: eBay Growth Check - "CONDITION UNKNOWN" instead of "N/A" for clarity
 # v2.4.0: eBay Growth Check - show condition badge when item is not new
@@ -50,6 +55,32 @@ COLORS = {
 EBAY_ATTRIBUTION = "Powered by eBay Browse API"
 EBAY_LINK = "https://www.ebay.com"
 EBAY_USER_AGREEMENT = "https://www.ebay.com/help/policies/member-behaviour-policies/user-agreement?id=4259"
+
+# Israeli Anti-Spam Law (Amendment 40) Compliance
+# These are only added when sending to third-party recipients (not self-notifications)
+ISRAELI_AD_PREFIX = "פרסומת"  # Hebrew for "Advertisement" - required by Israeli law
+AFFILIATE_DISCLOSURE = "This email contains affiliate links. We may earn a commission from qualifying purchases."
+OPT_OUT_NOTICE = "To stop receiving notifications: disable searches in your config or remove your email from recipients."
+
+# Operation Mode Detection
+# FoxFinder supports two modes:
+#
+# 1. PERSONAL USE (Self-Notification)
+#    - Operator sends notifications to themselves
+#    - Sender == Recipient (or matches exempt email below)
+#    - EXEMPT from Israeli Anti-Spam Law (personal use, not commercial)
+#
+# 2. SERVICE MODEL (Client Notifications)
+#    - Operator provides service to clients using THEIR OWN API credentials
+#    - Clients do NOT need eBay Developer accounts
+#    - Clients subscribe via manual one-on-one registration with operator
+#    - FULL Israeli Anti-Spam Law compliance automatically applied:
+#      - "פרסומת" prefix in subject line
+#      - Affiliate disclosure in footer
+#      - Opt-out instructions included
+#
+# The is_self_notification() function determines which mode applies.
+SELF_NOTIFICATION_EXEMPT_EMAIL = "ofirlevi@tutanota.com"
 
 # eBay ecosystem links (drives traffic to eBay platform)
 EBAY_DEALS = "https://www.ebay.com/deals"
@@ -87,6 +118,37 @@ CONDITION_BADGES = {
     'for parts or not working': ('FOR PARTS', '#f44336', '#fff'),  # Red
     'for parts': ('FOR PARTS', '#f44336', '#fff'),
 }
+
+
+def is_self_notification(sender: str, recipients: list) -> bool:
+    """
+    Check if this is a self-notification (exempt from Israeli Anti-Spam Law).
+
+    Israeli Anti-Spam Law (Amendment 40) regulates commercial messages sent to
+    THIRD PARTIES. Self-notifications where the sender is also the sole recipient
+    are exempt as they constitute personal use, not commercial advertising.
+
+    Args:
+        sender: The email sender address
+        recipients: List of recipient email addresses
+
+    Returns:
+        True if this is a self-notification (exempt from commercial compliance)
+    """
+    if not sender or not recipients:
+        return False
+
+    sender_lower = sender.lower().strip()
+
+    # Check if all recipients are the sender themselves
+    for recipient in recipients:
+        recipient_lower = recipient.lower().strip()
+        if recipient_lower != sender_lower:
+            # Also check against known self-notification email
+            if recipient_lower != SELF_NOTIFICATION_EXEMPT_EMAIL.lower():
+                return False  # Has third-party recipient
+
+    return True  # All recipients are self
 
 
 def _get_condition_badge(condition, show_if_unknown=True):
@@ -144,8 +206,23 @@ def _get_watchlist_url(item_id):
     return None
 
 
-def _build_email_wrapper(header_html, body_html, footer_text, border_color=None):
-    """Build complete HTML email with eBay-compliant branding."""
+def _build_email_wrapper(header_html, body_html, footer_text, border_color=None, is_self_notif=True):
+    """
+    Build complete HTML email with eBay-compliant branding.
+
+    Israeli Anti-Spam Law (Amendment 40) Compliance:
+    When is_self_notif=False (third-party recipients), adds:
+    - Affiliate disclosure
+    - Opt-out instructions
+    - Legal compliance footer
+
+    Args:
+        header_html: HTML for email header
+        body_html: HTML for email body
+        footer_text: Text for footer
+        border_color: Optional border color override
+        is_self_notif: If True, skip commercial compliance (personal use)
+    """
     border = border_color or COLORS['border_accent']
 
     # "Explore More on eBay" section - drives additional platform traffic
@@ -183,6 +260,19 @@ def _build_email_wrapper(header_html, body_html, footer_text, border_color=None)
         <a href="{EBAY_USER_AGREEMENT}" style="color: {COLORS['text_gray']}; text-decoration: none; font-size: 10px;">eBay User Agreement</a>
     </div>'''
 
+    # Israeli Anti-Spam Law (Amendment 40) compliance footer
+    # Only shown for third-party recipients (not self-notifications)
+    israeli_compliance_footer = ""
+    if not is_self_notif:
+        israeli_compliance_footer = f'''
+    <div style="padding: 12px 15px; background: {COLORS['bg_header']}; border-top: 1px solid {COLORS['border']};">
+        <div style="color: {COLORS['text_gray']}; font-size: 9px; line-height: 1.5;">
+            <strong style="color: {COLORS['text_light']};">Affiliate Disclosure:</strong> {html.escape(AFFILIATE_DISCLOSURE)}<br>
+            <strong style="color: {COLORS['text_light']};">Opt-Out:</strong> {html.escape(OPT_OUT_NOTICE)}<br>
+            <span style="color: {COLORS['text_dark']};">Israeli Anti-Spam Law (Amendment 40) compliant. eBay Partner Network affiliate.</span>
+        </div>
+    </div>'''
+
     return f'''<!DOCTYPE html>
 <html>
 <head>
@@ -205,6 +295,7 @@ def _build_email_wrapper(header_html, body_html, footer_text, border_color=None)
     {app_section}
     {guarantee_section}
     {ebay_footer}
+    {israeli_compliance_footer}
     <div style="background: {COLORS['bg_header']}; padding: 8px 15px; border-top: 1px solid {COLORS['border']};">
         <div style="color: {COLORS['text_dark']}; font-size: 9px;">{html.escape(footer_text)}</div>
     </div>
@@ -213,8 +304,20 @@ def _build_email_wrapper(header_html, body_html, footer_text, border_color=None)
 </html>'''
 
 
-def get_subject_line(source_name, listings):
-    """Generate email subject line."""
+def get_subject_line(source_name, listings, is_self_notif=True):
+    """
+    Generate email subject line.
+
+    Israeli Anti-Spam Law (Amendment 40) Compliance:
+    When sending to third-party recipients (not self-notifications),
+    the subject line must be prefixed with "פרסומת" (Advertisement).
+
+    Args:
+        source_name: The source identifier (e.g., "eBay API")
+        listings: List of listing dictionaries
+        is_self_notif: If True, this is a self-notification (exempt from commercial law)
+                       If False, adds "פרסומת" prefix for Israeli compliance
+    """
     count = len(listings) if listings else 0
 
     # Extract unique search names
@@ -234,15 +337,30 @@ def get_subject_line(source_name, listings):
 
     if search_terms:
         if len(search_terms) == 1:
-            return f"{base} [{search_terms[0]}]"
+            subject = f"{base} [{search_terms[0]}]"
         else:
-            return f"{base} [MULTIPLE]"
+            subject = f"{base} [MULTIPLE]"
+    else:
+        subject = base
 
-    return base
+    # Israeli Anti-Spam Law: Add "פרסומת" prefix for third-party recipients
+    if not is_self_notif:
+        subject = f"{ISRAELI_AD_PREFIX}: {subject}"
+
+    return subject
 
 
-def get_listing_html(source_name, listings, updated_listings=None, source_url=None):
-    """Generate HTML email body for listings."""
+def get_listing_html(source_name, listings, updated_listings=None, source_url=None, is_self_notif=True):
+    """
+    Generate HTML email body for listings.
+
+    Args:
+        source_name: The source identifier
+        listings: List of new listings
+        updated_listings: List of updated listings (price drops, etc.)
+        source_url: Optional source URL
+        is_self_notif: If True, skip commercial compliance footer (personal use)
+    """
     all_l = list(listings or [])
     upd = list(updated_listings or [])
     ts = datetime.now().strftime("%Y-%m-%d %H:%M")
@@ -266,7 +384,7 @@ def get_listing_html(source_name, listings, updated_listings=None, source_url=No
         {rows}
     </table>'''
 
-    return _build_email_wrapper(header, body, "FOXFINDER AUTO-NOTIFICATION")
+    return _build_email_wrapper(header, body, "FOXFINDER AUTO-NOTIFICATION", is_self_notif=is_self_notif)
 
 
 def _build_listing_row(item, is_update=False):
@@ -371,13 +489,26 @@ def _build_listing_row(item, is_update=False):
     </tr>'''
 
 
-def format_listing_email(source_name, new_ads, updated_ads=None, source_url=None):
-    """Format complete listing email (subject + body)."""
+def format_listing_email(source_name, new_ads, updated_ads=None, source_url=None, is_self_notif=True):
+    """
+    Format complete listing email (subject + body).
+
+    Args:
+        source_name: The source identifier
+        new_ads: List of new listings
+        updated_ads: List of updated listings
+        source_url: Optional source URL
+        is_self_notif: If True, skip commercial compliance (personal use)
+                       If False, add Israeli Anti-Spam Law compliance
+    """
     all_n = list(new_ads or [])
     all_u = list(updated_ads or [])
     if not all_n and not all_u:
         return None, None
-    return get_subject_line(source_name, all_n + all_u), get_listing_html(source_name, all_n, all_u, source_url=source_url)
+    return (
+        get_subject_line(source_name, all_n + all_u, is_self_notif=is_self_notif),
+        get_listing_html(source_name, all_n, all_u, source_url=source_url, is_self_notif=is_self_notif)
+    )
 
 
 def format_notice_email(notice_type, details, stats=None):

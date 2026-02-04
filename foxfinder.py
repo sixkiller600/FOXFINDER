@@ -10,16 +10,20 @@ if sys.version_info < (3, 9):
 FoxFinder - eBay Deal Notification Service
 Uses official eBay Browse API with EPN (eBay Partner Network) integration.
 
-Compliant with eBay Developer Program policies:
-- eBay API License Agreement
-- eBay Partner Network Terms
-- Application Growth Check requirements
+Compliant with:
+- eBay Developer Program policies (API License Agreement, EPN Terms, Growth Check)
+- Israeli Anti-Spam Law (Amendment 40 to Communications Law)
+- Israeli Privacy Protection Law (PPL) 5741-1981
+- GDPR and CCPA
 
-For more information, see README.md and PRIVACY_POLICY.md
+For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.9.0"
+VERSION = "4.10.0"
 __version__ = VERSION
+# v4.10.0: Israeli Anti-Spam Law (Amendment 40) compliance
+#          - Self-notifications exempt (sender == recipient)
+#          - Third-party recipients get "פרסומת" prefix + compliance footer
 # See CHANGELOG.md for full version history.
 
 # --- Constants ---
@@ -66,14 +70,15 @@ from ebay_common import (
 )
 
 try:
-    from email_templates import get_listing_html, get_alert_html, get_subject_line
+    from email_templates import get_listing_html, get_alert_html, get_subject_line, is_self_notification
     _EMAIL_TEMPLATES_LOADED = True
 except Exception as e:
     print(f"[WARNING] Failed to import email_templates: {e}", file=sys.stderr)
     _EMAIL_TEMPLATES_LOADED = False
-    def get_listing_html(s, l): return "\n".join([str(x) for x in l])
+    def get_listing_html(s, l, **kwargs): return "\n".join([str(x) for x in l])
     def get_alert_html(t, d, s): return f"{t}\n{d}"
-    def get_subject_line(s, l): return f"{s}: {len(l)} new"
+    def get_subject_line(s, l, **kwargs): return f"{s}: {len(l)} new"
+    def is_self_notification(sender, recipients): return True  # Default to exempt
 
 from shared_utils import check_disk_space
 
@@ -1203,14 +1208,28 @@ def send_alert_email(config: Dict[str, Any], alert_type: str, details: str = "")
 
 
 def send_email(config: Dict[str, Any], listings: List[Dict[str, Any]]) -> None:
+    """
+    Send email notification for new listings.
+
+    Israeli Anti-Spam Law (Amendment 40) Compliance:
+    - Self-notifications (sender == recipient) are exempt from commercial compliance
+    - Third-party recipients get "פרסומת" prefix and compliance footer
+    """
     if not listings: return
     display_list = []
     for l in listings:
         bo_tag = " [OBO]" if l.get('best_offer') else ""
         l['title'] = f"{l.get('title','')}{bo_tag}"
         display_list.append(l)
-    subject = get_subject_line("eBay API", display_list)
-    html_body = get_listing_html("eBay API", display_list)
+
+    # Check if this is a self-notification (exempt from Israeli Anti-Spam Law)
+    smtp_cfg = get_smtp_config(config)
+    sender = smtp_cfg.get('sender', '')
+    recipients = parse_recipients(smtp_cfg.get('recipient', ''))
+    is_self_notif = is_self_notification(sender, recipients)
+
+    subject = get_subject_line("eBay API", display_list, is_self_notif=is_self_notif)
+    html_body = get_listing_html("eBay API", display_list, is_self_notif=is_self_notif)
     if send_email_core(config, subject, html_body, is_html=True):
         update_run_log(increment_alerts=True)
     else:
@@ -1218,6 +1237,13 @@ def send_email(config: Dict[str, Any], listings: List[Dict[str, Any]]) -> None:
 
 
 def send_price_drop_email(config: Dict[str, Any], price_drops: List[Dict[str, Any]]) -> None:
+    """
+    Send email notification for price drops.
+
+    Israeli Anti-Spam Law (Amendment 40) Compliance:
+    - Self-notifications (sender == recipient) are exempt from commercial compliance
+    - Third-party recipients get "פרסומת" prefix and compliance footer
+    """
     if not price_drops:
         return
     display_list = []
@@ -1233,8 +1259,20 @@ def send_price_drop_email(config: Dict[str, Any], price_drops: List[Dict[str, An
         item['title'] = f"{item.get('title', '')}{drop_tag}{bo_tag}"
         display_list.append(item)
     count = len(display_list)
-    subject = f"[eBay API] PRICE DROP: {count} ITEM{'S' if count > 1 else ''} NOW IN RANGE"
-    html_body = get_listing_html("eBay PRICE DROPS", display_list)
+
+    # Check if this is a self-notification (exempt from Israeli Anti-Spam Law)
+    smtp_cfg = get_smtp_config(config)
+    sender = smtp_cfg.get('sender', '')
+    recipients = parse_recipients(smtp_cfg.get('recipient', ''))
+    is_self_notif = is_self_notification(sender, recipients)
+
+    # Israeli compliance: add "פרסומת" prefix for third-party recipients
+    if is_self_notif:
+        subject = f"[eBay API] PRICE DROP: {count} ITEM{'S' if count > 1 else ''} NOW IN RANGE"
+    else:
+        subject = f"פרסומת: [eBay API] PRICE DROP: {count} ITEM{'S' if count > 1 else ''} NOW IN RANGE"
+
+    html_body = get_listing_html("eBay PRICE DROPS", display_list, is_self_notif=is_self_notif)
     if send_email_core(config, subject, html_body, is_html=True):
         update_run_log(increment_alerts=True)
         log(f"Price drop notification sent: {count} items")

@@ -6,6 +6,44 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.10.0] - 2026-02-04
+
+### Added
+- **Dual Operation Mode Support**
+  - **Personal Use Mode**: Operator's own deal hunting (exempt from commercial compliance)
+  - **Service Model**: Notification service for clients with full Israeli compliance
+- **Israeli Anti-Spam Law (Amendment 40) compliance**
+  - Self-notification exemption: emails to yourself are exempt from commercial compliance
+  - Client notifications automatically get "פרסומת" (Advertisement) prefix in subject
+  - Affiliate disclosure footer for client recipients
+  - Opt-out instructions in email footer
+- **Service Model Documentation**
+  - Operator holds eBay API credentials (clients don't need their own)
+  - Manual one-on-one client registration process
+  - Consent tracking requirements for subscribers
+- `is_self_notification()` function in email_templates.py to detect personal vs. service mode
+- Israeli Privacy Protection Law (PPL) 5741-1981 compliance documentation
+- Comprehensive Israeli compliance section in PRIVACY_POLICY.md
+- Israeli compliance tables in COMPLIANCE_CHECKLIST.md
+
+### Changed
+- README.md: Added Operation Modes section explaining Personal Use vs Service Model
+- PRIVACY_POLICY.md: Version 2.0.0 with service model and subscriber data sections
+- COMPLIANCE_CHECKLIST.md: Version 1.4.0 with service model compliance details
+- email_templates.py version bumped to 2.7.0
+- `get_subject_line()` now accepts `is_self_notif` parameter
+- `get_listing_html()` now accepts `is_self_notif` parameter
+- `send_email()` and `send_price_drop_email()` now check recipient type
+
+### Legal
+- **Personal Use**: Self-notifications (sender == recipient) exempt from commercial compliance
+- **Service Model**: Full Israeli Anti-Spam Law compliance for all client notifications
+- Manual one-on-one registration satisfies Israeli consent requirements
+- Operator's API credentials serve all clients (standard EPN affiliate model)
+- Exempt email: ofirlevi@tutanota.com (configurable in email_templates.py)
+
+---
+
 ## [4.9.1] - 2026-01-29
 
 ### Added
