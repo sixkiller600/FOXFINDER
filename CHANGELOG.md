@@ -6,6 +6,20 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.11.0] - 2026-02-04
+
+### Added
+- **EPN Affiliate Disclosure in Header** - Per eBay Partner Network requirements
+  - "Ad - Contains affiliate links" now appears in email header, above the fold
+  - Disclosure visible before any affiliate links (not buried in footer)
+  - Complies with FTC, ASA, and eBay Partner Network disclosure policies
+  - Shows on ALL emails (EPN disclosure is separate from Israeli commercial law)
+
+### Changed
+- email_templates.py version bumped to 2.8.0
+
+---
+
 ## [4.10.1] - 2026-02-04
 
 ### Fixed

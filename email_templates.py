@@ -16,7 +16,8 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.7.1"
+__version__ = "2.8.0"
+# v2.8.0: EPN affiliate disclosure in header (above the fold) per eBay requirements
 # v2.7.1: Fix opt-out notice for service model clients
 # v2.7.0: Israeli Anti-Spam Law (Amendment 40) compliance
 #         - Add "פרסומת" prefix for third-party recipients
@@ -369,11 +370,16 @@ def get_listing_html(source_name, listings, updated_listings=None, source_url=No
     rows = "".join([_build_listing_row(i, False) for i in all_l] +
                    [_build_listing_row(i, True) for i in upd])
 
+    # EPN Affiliate Disclosure - ALWAYS shown per eBay Partner Network requirements
+    # Must be "above the fold" near promotional content, not buried in footer
+    affiliate_notice = f'<div style="color: {COLORS["text_gray"]}; font-size: 9px; margin-top: 6px; font-style: italic;">Ad - Contains affiliate links</div>'
+
     header = f'''
     <div style="background: {COLORS['bg_header']}; padding: 12px 15px; border-bottom: 2px solid {COLORS['border_accent']};">
         <div style="color: {COLORS['text_green']}; font-size: 10px; letter-spacing: 2px;">FOXFINDER</div>
         <div class="header-title" style="color: {COLORS['text_white']}; font-size: 20px; font-weight: bold; margin-top: 5px;">{html.escape(source_name.upper())}</div>
         <div style="color: {COLORS['text_gray']}; font-size: 11px; margin-top: 4px;">{ts} | {len(all_l)+len(upd)} items</div>
+        {affiliate_notice}
     </div>'''
 
     body = f'''

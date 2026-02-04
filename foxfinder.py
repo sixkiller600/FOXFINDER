@@ -19,8 +19,9 @@ Compliant with:
 For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.10.1"
+VERSION = "4.11.0"
 __version__ = VERSION
+# v4.11.0: EPN affiliate disclosure in email header per eBay Partner Network requirements
 # v4.10.1: Fix opt-out notice for service model clients
 # v4.10.0: Israeli Anti-Spam Law (Amendment 40) compliance
 #          - Self-notifications exempt (sender == recipient)
