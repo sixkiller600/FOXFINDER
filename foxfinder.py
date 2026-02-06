@@ -19,8 +19,10 @@ Compliant with:
 For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.11.0"
+VERSION = "4.12.1"
 __version__ = VERSION
+# v4.12.1: Enhanced subscriber settings (search preferences, custom message, phone, language)
+# v4.12.0: Double opt-in subscriber invitation system (invite, IMAP confirm, unsubscribe)
 # v4.11.0: EPN affiliate disclosure in email header per eBay Partner Network requirements
 # v4.10.1: Fix opt-out notice for service model clients
 # v4.10.0: Israeli Anti-Spam Law (Amendment 40) compliance
@@ -81,6 +83,18 @@ except Exception as e:
     def get_alert_html(t, d, s): return f"{t}\n{d}"
     def get_subject_line(s, l, **kwargs): return f"{s}: {len(l)} new"
     def is_self_notification(sender, recipients): return True  # Default to exempt
+
+try:
+    from subscriber_manager import (
+        invite_subscriber, check_confirmations, unsubscribe,
+        update_subscriber,
+        get_active_subscribers, list_all_subscribers, get_subscriber_status,
+        send_to_all_subscribers,
+    )
+    _SUBSCRIBER_MANAGER_LOADED = True
+except Exception as e:
+    print(f"[INFO] Subscriber manager not loaded: {e}", file=sys.stderr)
+    _SUBSCRIBER_MANAGER_LOADED = False
 
 from shared_utils import check_disk_space
 
@@ -1360,6 +1374,14 @@ def run_foxfinder() -> None:
                 seen = cleanup_old_seen(seen, max_age_days=SEEN_MAX_AGE_DAYS)
                 save_seen(seen)
                 gc.collect()
+            # Check for subscriber CONFIRM/UNSUBSCRIBE replies every 5 cycles
+            if _SUBSCRIBER_MANAGER_LOADED and cycle_count > 0 and cycle_count % 5 == 0:
+                try:
+                    actions = check_confirmations(config)
+                    if actions:
+                        log(f"Subscriber check: {actions} action(s) processed")
+                except Exception as e:
+                    log(f"Subscriber check error (non-fatal): {e}")
             config = load_config()
             creds = config.get("api_credentials", {})
             app_id = creds.get("app_id")
@@ -1431,6 +1453,14 @@ def run_foxfinder() -> None:
                     log(f"Found: [{item.get('id')}] {item.get('title')}")
                 log(f"Found {len(all_new)} new listings. Calls today: {calls_today}")
                 send_email(config, all_new)
+                # Forward to subscribers (per-subscriber filtered)
+                if _SUBSCRIBER_MANAGER_LOADED and get_active_subscribers():
+                    try:
+                        sent = send_to_all_subscribers(config, all_new, "new")
+                        if sent:
+                            log(f"Subscriber broadcast: {sent} new-listing email(s)")
+                    except Exception as e:
+                        log(f"Subscriber broadcast error (non-fatal): {e}")
                 save_seen(seen)
             if all_price_drops:
                 for item in all_price_drops:
@@ -1439,6 +1469,14 @@ def run_foxfinder() -> None:
                     log(f"Price drop: [{item.get('id')}] ${old_p:.2f} -> ${new_p:.2f} {item.get('title')}")
                 log(f"Found {len(all_price_drops)} price drops. Calls today: {calls_today}")
                 send_price_drop_email(config, all_price_drops)
+                # Forward price drops to subscribers (per-subscriber filtered)
+                if _SUBSCRIBER_MANAGER_LOADED and get_active_subscribers():
+                    try:
+                        sent = send_to_all_subscribers(config, all_price_drops, "price_drop")
+                        if sent:
+                            log(f"Subscriber broadcast: {sent} price-drop email(s)")
+                    except Exception as e:
+                        log(f"Subscriber price-drop broadcast error (non-fatal): {e}")
                 save_seen(seen)
             if not all_new and not all_price_drops:
                 log(f"Cycle complete ({search_count} searches). Calls today: {calls_today}")
@@ -1547,9 +1585,236 @@ def run_validate() -> int:
     return 0
 
 
+def _resolve_searches(searches_str: str, config: Dict[str, Any]) -> Optional[List[str]]:
+    """
+    Resolve --searches CLI input to a list of search name strings.
+
+    Accepts:
+      - "all"           → None (no filter, receive everything)
+      - "1,3"           → resolve numbers to names via config search indices
+      - "Asus Loki,AMD" → pass through as name strings
+      - ""              → None (not specified)
+
+    Returns:
+      - None if "all" or empty (no filter)
+      - List of resolved search name strings
+      - False if a number is out of range (caller should abort)
+    """
+    if not searches_str:
+        return None
+
+    if searches_str.lower().strip() == 'all':
+        return None
+
+    config_searches = config.get('searches', [])
+    parts = [s.strip() for s in searches_str.split(',') if s.strip()]
+
+    if not parts:
+        return None
+
+    # Check if ALL parts are numbers → resolve by index
+    if all(p.isdigit() for p in parts):
+        resolved = []
+        for p in parts:
+            idx = int(p)
+            if idx < 1 or idx > len(config_searches):
+                print(f"ERROR: Search #{idx} out of range (have {len(config_searches)} searches)")
+                print("Use --list-searches to see available numbers.")
+                return False
+            resolved.append(config_searches[idx - 1].get('name', ''))
+        return resolved
+
+    # Otherwise treat as name strings
+    return parts
+
+
+def _validate_search_names(searches: List[str], config: Dict[str, Any]) -> bool:
+    """
+    Validate search names against config. Returns True to proceed, False to abort.
+    Prompts user on mismatch.
+    """
+    config_search_names = [s.get('name', '') for s in config.get('searches', [])]
+    config_names_lower = {n.lower().strip() for n in config_search_names}
+    bad = [s for s in searches if s.lower().strip() not in config_names_lower]
+    if bad:
+        print(f"WARNING: These search names don't match any configured search:")
+        for b in bad:
+            print(f"  - \"{b}\"")
+        print(f"Available searches: {', '.join(config_search_names)}")
+        print(f"Subscriber will receive NO results for unmatched names.")
+        print(f"Continue anyway? (y/n) ", end='', flush=True)
+        answer = input().strip().lower()
+        if answer not in ('y', 'yes'):
+            print("Aborted.")
+            return False
+    return True
+
+
+def run_subscriber_command(args) -> int:
+    """Handle subscriber CLI commands. Returns exit code."""
+    if not _SUBSCRIBER_MANAGER_LOADED:
+        print("ERROR: subscriber_manager.py not found or failed to load")
+        return 1
+
+    config = load_config()
+    if not config:
+        print("ERROR: Could not load ebay_config.json")
+        return 1
+
+    # Read-only / local commands first (no network I/O)
+    if args.list_subscribers:
+        subs = list_all_subscribers()
+        if not subs:
+            print("No subscribers.")
+            return 0
+        print(f"{'EMAIL':<30} {'NAME':<15} {'STATUS':<10} {'LANG':<5} {'SEARCHES':<25} {'SINCE'}")
+        print("-" * 110)
+        for s in subs:
+            email = s.get('email', '')[:29]
+            name = s.get('name', '')[:14]
+            status = s.get('status', '?')
+            lang = s.get('language', 'en')[:4]
+            searches_list = s.get('searches', [])
+            if searches_list:
+                searches_str = ', '.join(searches_list)[:24]
+            else:
+                searches_str = '(all)'
+            if status == 'confirmed':
+                since = (s.get('confirmed_at') or '')[:19]
+            elif status == 'invited':
+                since = (s.get('invited_at') or '')[:19]
+            elif status == 'unsubscribed':
+                since = (s.get('unsubscribed_at') or '')[:19]
+            else:
+                since = ''
+            print(f"{email:<30} {name:<15} {status:<10} {lang:<5} {searches_str:<25} {since}")
+        print(f"\nTotal: {len(subs)} | Active: {len([s for s in subs if s.get('status') == 'confirmed'])}")
+        return 0
+
+    if args.list_searches:
+        searches = config.get('searches', [])
+        if not searches:
+            print("No searches configured.")
+            return 0
+        print(f"{'#':<4} {'NAME':<30} {'QUERY':<30} {'ENABLED'}")
+        print("-" * 75)
+        for i, s in enumerate(searches, 1):
+            name = s.get('name', '?')[:29]
+            query = s.get('query', '')[:29]
+            enabled = 'yes' if s.get('enabled', True) else 'no'
+            print(f"{i:<4} {name:<30} {query:<30} {enabled}")
+        print(f"\nTotal: {len(searches)} | Enabled: {len([s for s in searches if s.get('enabled', True)])}")
+        return 0
+
+    if args.unsubscribe:
+        return 0 if unsubscribe(args.unsubscribe) else 1
+
+    if args.update_subscriber:
+        email_addr = args.update_subscriber
+        # Resolve searches (numbers, names, or "all")
+        update_searches = None
+        if args.searches:
+            resolved = _resolve_searches(args.searches, config)
+            if resolved is False:
+                return 1  # out-of-range number
+            if resolved is None:
+                update_searches = []  # explicit "all" → reset to empty list
+            else:
+                update_searches = resolved
+                if not _validate_search_names(update_searches, config):
+                    return 1
+        update_phone = args.phone if args.phone else None
+        update_lang = args.lang if '--lang' in sys.argv else None
+        update_message = args.message if args.message else None
+        return 0 if update_subscriber(
+            email_addr,
+            phone=update_phone,
+            language=update_lang,
+            searches=update_searches,
+            custom_message=update_message
+        ) else 1
+
+    if args.subscriber_status:
+        sub = get_subscriber_status(args.subscriber_status)
+        if not sub:
+            print(f"Not found: {args.subscriber_status}")
+            return 1
+        for key, value in sub.items():
+            print(f"  {key}: {value}")
+        return 0
+
+    # Network I/O commands (SMTP/IMAP)
+    if args.invite:
+        email_addr = args.invite[0]
+        name = args.invite[1] if len(args.invite) > 1 else email_addr.split('@')[0]
+        # Resolve searches (numbers, names, or "all")
+        searches = _resolve_searches(args.searches, config)
+        if searches is False:
+            return 1  # out-of-range number
+        # Validate name-based searches against config
+        if searches and not _validate_search_names(searches, config):
+            return 1
+        return 0 if invite_subscriber(
+            config, email_addr, name,
+            phone=args.phone,
+            language=args.lang,
+            searches=searches,
+            custom_message=args.message
+        ) else 1
+
+    if args.check_confirmations:
+        count = check_confirmations(config)
+        print(f"Processed {count} confirmation(s)")
+        return 0
+
+    return 0
+
+
 if __name__ == "__main__":
-    if len(sys.argv) > 1 and sys.argv[1] in ("--validate", "-v"):
+    import argparse
+    parser = argparse.ArgumentParser(
+        description=f"FoxFinder v{VERSION} - eBay Deal Notification Service",
+        formatter_class=argparse.RawDescriptionHelpFormatter,
+    )
+    parser.add_argument("--validate", "-v", action="store_true",
+                        help="Validate configuration and exit")
+    # Subscriber commands
+    parser.add_argument("--invite", nargs='+', metavar=("EMAIL", "NAME"),
+                        help="Invite a subscriber: --invite email@example.com \"John Doe\"")
+    parser.add_argument("--searches", type=str, default="",
+                        help="Search filter: numbers (1,3), names (\"Asus Loki,AMD\"), or \"all\"")
+    parser.add_argument("--message", type=str, default="",
+                        help="Personal note in invitation email (with --invite)")
+    parser.add_argument("--phone", type=str, default="",
+                        help="Phone number for operator records (with --invite)")
+    parser.add_argument("--lang", type=str, default="en", choices=["en", "he"],
+                        help="Language preference: en (English) or he (Hebrew) (default: en)")
+    parser.add_argument("--update-subscriber", metavar="EMAIL",
+                        help="Update subscriber fields without re-sending invitation")
+    parser.add_argument("--list-searches", action="store_true",
+                        help="List all configured search names")
+    parser.add_argument("--check-confirmations", action="store_true",
+                        help="Check IMAP for CONFIRM/UNSUBSCRIBE replies")
+    parser.add_argument("--list-subscribers", action="store_true",
+                        help="List all subscribers with status")
+    parser.add_argument("--unsubscribe", metavar="EMAIL",
+                        help="Unsubscribe an email address")
+    parser.add_argument("--subscriber-status", metavar="EMAIL",
+                        help="Show detailed status for a subscriber")
+
+    args = parser.parse_args()
+
+    # Handle validate
+    if args.validate:
         sys.exit(run_validate())
+
+    # Handle subscriber commands
+    if any([args.invite, args.update_subscriber, args.list_searches,
+            args.check_confirmations, args.list_subscribers,
+            args.unsubscribe, args.subscriber_status]):
+        sys.exit(run_subscriber_command(args))
+
+    # Default: run the service
     try:
         run_foxfinder()
     except KeyboardInterrupt:

@@ -23,6 +23,13 @@
         "password": "xxxx xxxx xxxx xxxx",
         "recipient": "notify@example.com"
     },
+    "operator": {
+        "name": "YOUR_NAME_HERE",
+        "business_name": "",
+        "postal_address": "YOUR_POSTAL_ADDRESS_HERE",
+        "contact_email": "your.email@gmail.com",
+        "_note": "Required for subscriber features. Physical address required by CAN-SPAM law."
+    },
     "check_interval_seconds": 120,
     "recovery": {
         "max_consecutive_failures": 5,

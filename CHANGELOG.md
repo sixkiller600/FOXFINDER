@@ -6,6 +6,84 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.12.1] - 2026-02-06
+
+### Added
+- **Per-Subscriber Search Preferences** — subscribers now receive only listings matching their searches
+  - `searches` field: list of search names to subscribe to (empty = all products)
+  - Filtering applied per-subscriber at send time via `send_to_subscriber()`
+  - Subscribers with no search preferences receive all listings (backwards compatible)
+- **Custom Invitation Message** — operator can include a personal note in invitation emails
+  - `custom_message` field stored per subscriber
+  - Rendered in a styled box with operator name header in the invitation email
+  - XSS-safe: all user input HTML-escaped
+- **Phone Number** — stored per subscriber for operator records / compliance
+  - `phone` field: optional, stored as-is
+- **Language Preference** — `en` (English) or `he` (Hebrew)
+  - `language` field: defaults to `en`
+  - Stored in subscriber record for future use
+- **New CLI Arguments** (all used with `--invite`)
+  - `--searches "Asus Loki,AMD 9950X"` — comma-separated search names
+  - `--message "Hey David, check these out!"` — personal note in invitation
+  - `--phone "+972-50-1234567"` — phone for operator records
+  - `--lang en|he` — language preference (default: en)
+- **"Your Alerts" Section** in invitation email showing subscribed searches
+- `send_to_subscriber()` function in subscriber_manager.py for per-subscriber filtering
+
+### Changed
+- `send_to_all_subscribers()` now accepts raw listings + listing type instead of pre-built subject/body
+- `format_invitation_email()` accepts `searches`, `custom_message`, `language` parameters
+- `--list-subscribers` table now shows `LANG` and `SEARCHES` columns
+- Main loop subscriber broadcasts now use per-subscriber filtered `send_to_all_subscribers(config, listings, type)`
+- subscriber_manager.py version bumped to 1.1.0
+- email_templates.py version bumped to 2.10.0
+- foxfinder.py version bumped to 4.12.1
+
+---
+
+## [4.12.0] - 2026-02-06
+
+### Added
+- **Double Opt-In Subscriber Invitation System**
+  - Email-based invitation flow: invite → CONFIRM reply → welcome email
+  - IMAP inbox monitoring for CONFIRM/UNSUBSCRIBE replies (automated double opt-in)
+  - Subscriber lifecycle: invited → confirmed → unsubscribed
+  - Consent proof storage (GDPR Art. 7): consent text shown, confirmation timestamp, method
+  - Beautiful invitation email matching FoxFinder's dark theme with eBay blue accents
+  - Welcome email with consent receipt after confirmation
+  - Unsubscribe confirmation email
+- **CLI Commands** (argparse-based)
+  - `--invite EMAIL NAME` — Send invitation email to a new subscriber
+  - `--check-confirmations` — Process IMAP inbox for CONFIRM/UNSUBSCRIBE replies
+  - `--list-subscribers` — Display all subscribers with status table
+  - `--unsubscribe EMAIL` — Manually unsubscribe an email address
+  - `--subscriber-status EMAIL` — Show detailed subscriber record
+- **Main Loop Integration**
+  - Auto-check IMAP for subscriber replies every 5 cycles
+  - Auto-forward new listing and price drop emails to all active subscribers
+  - Graceful fallback: subscriber features disabled if module missing
+- **Operator Identification** in config (CAN-SPAM compliance)
+  - `operator.name`, `operator.postal_address`, `operator.contact_email`
+  - Included in all subscriber email footers
+
+### New File
+- `subscriber_manager.py` v1.0.0 — Subscriber lifecycle management (zero new dependencies)
+- `foxfinder_subscribers.json` — Subscriber data store (created on first invite)
+
+### Changed
+- foxfinder.py version bumped to 4.12.0
+- email_templates.py version bumped to 2.9.0
+- `ebay_config.json` / template: added `operator` section
+- CLI now uses `argparse` (backwards compatible: `--validate` and bare run still work)
+
+### Legal Compliance
+- **GDPR**: Double opt-in, consent proof stored per subscriber, right to unsubscribe
+- **Israeli Amendment 40**: "פרסומת" prefix, one-time invitation statement, sender ID
+- **CAN-SPAM**: Physical postal address, immediate opt-out processing, accurate headers
+- **eBay EPN**: "Ad - Contains affiliate links" above the fold in invitation email
+
+---
+
 ## [4.11.0] - 2026-02-04
 
 ### Added
@@ -208,9 +286,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 | Component | Version | Description |
 |-----------|---------|-------------|
-| `foxfinder.py` | 4.9.0 | Main application |
+| `foxfinder.py` | 4.12.1 | Main application |
+| `subscriber_manager.py` | 1.1.0 | Subscriber lifecycle management |
+| `email_templates.py` | 2.10.0 | Email templates |
 | `ebay_common.py` | 1.2.1 | Shared utilities |
-| `email_templates.py` | 2.6.0 | Email templates |
 | `shared_utils.py` | 1.2.0 | Utility functions |
 
 ---

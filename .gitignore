@@ -4,6 +4,16 @@
 ebay_config.json
 ebay_config.bak
 
+# Subscriber data (contains personal info)
+foxfinder_subscribers.json
+
+# EPN screenshot files (contain postal address / personal data)
+epn_screenshot_*.html
+generate_epn_screenshots.py
+send_epn_test_emails.py
+_preview_invitation.html
+email_mockup.html
+
 # Runtime state files
 ebay_token.json
 ebay_rate_limit.json

@@ -16,7 +16,9 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.8.0"
+__version__ = "2.10.0"
+# v2.10.0: Enhanced invitation email with search preferences, custom message, language
+# v2.9.0: Subscriber invitation, confirmation, and unsubscribe email templates
 # v2.8.0: EPN affiliate disclosure in header (above the fold) per eBay requirements
 # v2.7.1: Fix opt-out notice for service model clients
 # v2.7.0: Israeli Anti-Spam Law (Amendment 40) compliance
@@ -552,6 +554,276 @@ def get_notice_html(notice_type, details, stats=None):
     </div>'''
 
     return _build_email_wrapper(header, body, "FOXFINDER SYSTEM NOTICE", border_color='#f00')
+
+
+def format_invitation_email(subscriber_name, subscriber_email, operator, consent_text,
+                             searches=None, custom_message="", language="en"):
+    """
+    Format invitation email for double opt-in subscriber enrollment.
+
+    This is the KEY email for eBay EPN screenshot submission.
+    Contains all legal compliance elements for Israeli, CAN-SPAM, and GDPR law.
+
+    Args:
+        subscriber_name: The subscriber's display name
+        subscriber_email: The subscriber's email address
+        operator: Dict with name, business_name, postal_address, contact_email
+        consent_text: The consent statement shown to subscriber
+        searches: List of search name strings (None/empty = all products)
+        custom_message: Personal note from operator shown in email (optional)
+        language: Language preference "en" or "he" (stored, not changing email language)
+
+    Returns:
+        Tuple of (subject, html_body)
+    """
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M")
+    op_name = html.escape(operator.get('name', ''))
+    op_business = html.escape(operator.get('business_name', ''))
+    op_address = html.escape(operator.get('postal_address', ''))
+    op_email = html.escape(operator.get('contact_email', ''))
+    safe_name = html.escape(subscriber_name)
+    safe_email = html.escape(subscriber_email)
+
+    subject = f"{ISRAELI_AD_PREFIX}: FOXFINDER - You're Invited to Join Deal Alerts"
+
+    header = f'''
+    <div style="background: {COLORS['bg_header']}; padding: 15px; border-bottom: 2px solid {COLORS['ebay_blue']};">
+        <div style="color: {COLORS['text_green']}; font-size: 10px; letter-spacing: 2px;">FOXFINDER</div>
+        <div class="header-title" style="color: {COLORS['text_white']}; font-size: 22px; font-weight: bold; margin-top: 5px;">INVITATION</div>
+        <div style="color: {COLORS['text_gray']}; font-size: 9px; margin-top: 6px; font-style: italic;">Ad - Contains affiliate links</div>
+    </div>'''
+
+    # Custom message box (only if custom_message is non-empty)
+    custom_message_html = ""
+    if custom_message and custom_message.strip():
+        safe_message = html.escape(custom_message.strip())
+        custom_message_html = f'''
+        <div style="border-left: 3px solid {COLORS['ebay_blue']}; padding: 12px 15px; margin-bottom: 20px; background: {COLORS['bg_row_alt']};">
+            <div style="color: {COLORS['text_gray']}; font-size: 10px; letter-spacing: 1px; margin-bottom: 8px; font-weight: bold;">A MESSAGE FROM {html.escape(operator.get('name', '').upper())}</div>
+            <div style="color: {COLORS['text_light']}; font-size: 12px; line-height: 1.6; font-style: italic;">
+                &ldquo;{safe_message}&rdquo;
+            </div>
+        </div>'''
+
+    # Your Alerts section (shows search preferences)
+    alerts_html = ""
+    if searches and len(searches) > 0:
+        search_items = "".join(
+            f'<div style="color: {COLORS["text_light"]}; font-size: 12px; margin: 4px 0;">&#9656; {html.escape(s.strip())}</div>'
+            for s in searches if s and s.strip()
+        )
+        if search_items:
+            alerts_html = f'''
+        <div style="border: 1px solid {COLORS['border']}; padding: 12px; margin-bottom: 20px; background: {COLORS['bg_row_alt']};">
+            <div style="color: {COLORS['ebay_blue']}; font-size: 11px; letter-spacing: 1px; margin-bottom: 10px; font-weight: bold;">YOUR ALERTS</div>
+            <div style="color: {COLORS['text_gray']}; font-size: 11px; margin-bottom: 8px;">You'll receive notifications for:</div>
+            {search_items}
+        </div>'''
+    else:
+        alerts_html = f'''
+        <div style="border: 1px solid {COLORS['border']}; padding: 12px; margin-bottom: 20px; background: {COLORS['bg_row_alt']};">
+            <div style="color: {COLORS['ebay_blue']}; font-size: 11px; letter-spacing: 1px; margin-bottom: 10px; font-weight: bold;">YOUR ALERTS</div>
+            <div style="color: {COLORS['text_light']}; font-size: 12px;">You'll receive notifications for all monitored products.</div>
+        </div>'''
+
+    body = f'''
+    <div style="padding: 20px 15px; background: {COLORS['bg_row']};">
+        <!-- Personal greeting -->
+        <div style="color: {COLORS['text_white']}; font-size: 15px; margin-bottom: 15px;">
+            Hi {safe_name},
+        </div>
+        <div style="color: {COLORS['text_light']}; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">
+            You've been personally invited to receive <strong style="color: {COLORS['text_green']};">FoxFinder</strong> deal alerts —
+            an automated eBay deal notification service that monitors eBay listings and sends you email alerts
+            when items matching your interests are found at great prices.
+        </div>
+
+        {custom_message_html}
+
+        <!-- What You'll Receive -->
+        <div style="border: 1px solid {COLORS['border']}; padding: 12px; margin-bottom: 20px; background: {COLORS['bg_row_alt']};">
+            <div style="color: {COLORS['ebay_blue']}; font-size: 11px; letter-spacing: 1px; margin-bottom: 10px; font-weight: bold;">WHAT YOU'LL RECEIVE</div>
+            <div style="color: {COLORS['text_light']}; font-size: 12px; line-height: 1.8;">
+                &#8226; <strong>New Listings</strong> — Alerts when matching items are newly listed on eBay<br>
+                &#8226; <strong>Price Drops</strong> — Notifications when tracked items drop into your price range<br>
+                &#8226; <strong>Direct Links</strong> — One-click links to eBay listings with item details<br>
+                &#8226; <strong>Professional Emails</strong> — Clean, mobile-friendly notifications with thumbnails and seller info
+            </div>
+        </div>
+
+        {alerts_html}
+
+        <!-- How to Subscribe -->
+        <div style="margin-bottom: 20px;">
+            <div style="color: {COLORS['text_white']}; font-size: 13px; font-weight: bold; margin-bottom: 10px;">How to Subscribe:</div>
+            <div style="color: {COLORS['text_light']}; font-size: 12px; line-height: 1.8;">
+                <strong style="color: {COLORS['text_cyan']};">Step 1:</strong> Read the disclosure and consent information below<br>
+                <strong style="color: {COLORS['text_cyan']};">Step 2:</strong> Reply to this email with the word <strong style="color: {COLORS['text_green']};">CONFIRM</strong><br>
+                <strong style="color: {COLORS['text_cyan']};">Step 3:</strong> You'll receive a welcome email confirming your subscription
+            </div>
+        </div>
+
+        <!-- CONFIRM Action Box -->
+        <div style="border: 3px solid {COLORS['text_green']}; padding: 20px; text-align: center; margin: 20px 0; background: #001a00;">
+            <div style="color: {COLORS['text_light']}; font-size: 12px; margin-bottom: 10px;">To subscribe, reply to this email with:</div>
+            <div style="color: {COLORS['text_green']}; font-size: 28px; font-weight: bold; letter-spacing: 4px;">CONFIRM</div>
+        </div>
+
+        <!-- Legal Disclosure Section -->
+        <div style="border-top: 1px solid {COLORS['border']}; padding-top: 15px; margin-top: 20px;">
+            <div style="color: {COLORS['text_gray']}; font-size: 10px; letter-spacing: 1px; margin-bottom: 10px; font-weight: bold;">DISCLOSURE & CONSENT</div>
+            <div style="color: {COLORS['text_gray']}; font-size: 10px; line-height: 1.6;">
+                <strong style="color: {COLORS['text_light']};">Affiliate Disclosure:</strong> {html.escape(AFFILIATE_DISCLOSURE)}<br><br>
+                <strong style="color: {COLORS['text_light']};">Consent:</strong> {html.escape(consent_text)}<br><br>
+                <strong style="color: {COLORS['text_light']};">Opt-Out:</strong> You may unsubscribe at any time by replying <strong>UNSUBSCRIBE</strong> to any notification email, or by contacting the operator directly. Unsubscribe requests are processed immediately.<br><br>
+                <strong style="color: {COLORS['text_light']};">Israeli Law Notice:</strong> This message is sent in compliance with the Israeli Communications Law (Bezeq and Broadcasts), Amendment 40 (Anti-Spam). This is a one-time invitation. If you do not reply CONFIRM, you will not be contacted again.<br><br>
+                <span style="color: {COLORS['text_dark']};">Israeli Anti-Spam Law (Amendment 40) compliant. eBay Partner Network affiliate.</span>
+            </div>
+        </div>
+
+        <!-- Operator Identification (CAN-SPAM) -->
+        <div style="border-top: 1px solid {COLORS['border']}; padding-top: 12px; margin-top: 15px;">
+            <div style="color: {COLORS['text_gray']}; font-size: 10px; letter-spacing: 1px; margin-bottom: 8px; font-weight: bold;">SENDER IDENTIFICATION</div>
+            <div style="color: {COLORS['text_gray']}; font-size: 10px; line-height: 1.6;">
+                {op_name}{(' / ' + op_business) if op_business else ''}<br>
+                {op_address}<br>
+                Contact: {op_email}
+            </div>
+        </div>
+    </div>'''
+
+    footer_text = f"FOXFINDER INVITATION | {ts} | Sent to: {safe_email}"
+
+    return subject, _build_email_wrapper(header, body, footer_text,
+                                          border_color=COLORS['ebay_blue'],
+                                          is_self_notif=False)
+
+
+def format_confirmation_email(subscriber_name, subscriber_email, operator):
+    """
+    Format welcome/confirmation email sent after subscriber replies CONFIRM.
+
+    Includes consent receipt with timestamp for GDPR Art. 7 compliance.
+
+    Args:
+        subscriber_name: The subscriber's display name
+        subscriber_email: The subscriber's email address
+        operator: Dict with name, business_name, postal_address, contact_email
+
+    Returns:
+        Tuple of (subject, html_body)
+    """
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    op_name = html.escape(operator.get('name', ''))
+    op_address = html.escape(operator.get('postal_address', ''))
+    op_email = html.escape(operator.get('contact_email', ''))
+    safe_name = html.escape(subscriber_name)
+    safe_email = html.escape(subscriber_email)
+
+    subject = f"{ISRAELI_AD_PREFIX}: FOXFINDER - Welcome! Subscription Confirmed"
+
+    header = f'''
+    <div style="background: {COLORS['bg_header']}; padding: 15px; border-bottom: 2px solid {COLORS['text_green']};">
+        <div style="color: {COLORS['text_green']}; font-size: 10px; letter-spacing: 2px;">FOXFINDER</div>
+        <div class="header-title" style="color: {COLORS['text_white']}; font-size: 22px; font-weight: bold; margin-top: 5px;">SUBSCRIPTION CONFIRMED</div>
+        <div style="color: {COLORS['text_gray']}; font-size: 9px; margin-top: 6px; font-style: italic;">Ad - Contains affiliate links</div>
+    </div>'''
+
+    body = f'''
+    <div style="padding: 20px 15px; background: {COLORS['bg_row']};">
+        <div style="color: {COLORS['text_white']}; font-size: 15px; margin-bottom: 15px;">
+            Welcome, {safe_name}!
+        </div>
+        <div style="color: {COLORS['text_light']}; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">
+            Your subscription to FoxFinder deal alerts has been confirmed.
+            You will now receive email notifications when matching eBay listings are found.
+        </div>
+
+        <!-- Consent Receipt -->
+        <div style="border: 1px solid {COLORS['border']}; padding: 12px; margin-bottom: 20px; background: {COLORS['bg_row_alt']};">
+            <div style="color: {COLORS['ebay_blue']}; font-size: 11px; letter-spacing: 1px; margin-bottom: 10px; font-weight: bold;">CONSENT RECEIPT</div>
+            <div style="color: {COLORS['text_light']}; font-size: 11px; line-height: 1.8;">
+                <strong>Subscriber:</strong> {safe_name} ({safe_email})<br>
+                <strong>Confirmed at:</strong> {ts} UTC<br>
+                <strong>Method:</strong> Email reply (double opt-in)<br>
+                <strong>Service:</strong> FoxFinder eBay Deal Alerts<br>
+                <strong>Operator:</strong> {op_name}
+            </div>
+        </div>
+
+        <div style="color: {COLORS['text_gray']}; font-size: 11px; line-height: 1.5;">
+            To unsubscribe at any time, simply reply <strong style="color: {COLORS['text_light']};">UNSUBSCRIBE</strong> to any notification email.
+        </div>
+
+        <!-- Operator ID -->
+        <div style="border-top: 1px solid {COLORS['border']}; padding-top: 12px; margin-top: 15px;">
+            <div style="color: {COLORS['text_gray']}; font-size: 10px; line-height: 1.6;">
+                {op_name} | {op_address} | {op_email}
+            </div>
+        </div>
+    </div>'''
+
+    footer_text = f"FOXFINDER CONFIRMATION | {ts}"
+
+    return subject, _build_email_wrapper(header, body, footer_text,
+                                          border_color=COLORS['text_green'],
+                                          is_self_notif=False)
+
+
+def format_unsubscribe_email(subscriber_email, operator):
+    """
+    Format unsubscribe confirmation email.
+
+    Sent when a subscriber replies UNSUBSCRIBE or is manually removed.
+
+    Args:
+        subscriber_email: The subscriber's email address
+        operator: Dict with name, business_name, postal_address, contact_email
+
+    Returns:
+        Tuple of (subject, html_body)
+    """
+    ts = datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+    op_name = html.escape(operator.get('name', ''))
+    op_address = html.escape(operator.get('postal_address', ''))
+    op_email = html.escape(operator.get('contact_email', ''))
+    safe_email = html.escape(subscriber_email)
+
+    subject = "FOXFINDER - Unsubscribe Confirmed"
+
+    header = f'''
+    <div style="background: {COLORS['bg_header']}; padding: 15px; border-bottom: 2px solid {COLORS['text_gray']};">
+        <div style="color: {COLORS['text_green']}; font-size: 10px; letter-spacing: 2px;">FOXFINDER</div>
+        <div class="header-title" style="color: {COLORS['text_white']}; font-size: 22px; font-weight: bold; margin-top: 5px;">UNSUBSCRIBED</div>
+    </div>'''
+
+    body = f'''
+    <div style="padding: 20px 15px; background: {COLORS['bg_row']};">
+        <div style="color: {COLORS['text_light']}; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">
+            Your email address <strong style="color: {COLORS['text_white']};">{safe_email}</strong>
+            has been removed from FoxFinder deal alerts.
+        </div>
+        <div style="color: {COLORS['text_light']}; font-size: 13px; line-height: 1.6; margin-bottom: 20px;">
+            You will no longer receive notification emails from this service.
+            This action was processed at {ts} UTC.
+        </div>
+        <div style="color: {COLORS['text_gray']}; font-size: 11px;">
+            If this was done in error, contact the operator to re-subscribe.
+        </div>
+
+        <!-- Operator ID -->
+        <div style="border-top: 1px solid {COLORS['border']}; padding-top: 12px; margin-top: 15px;">
+            <div style="color: {COLORS['text_gray']}; font-size: 10px; line-height: 1.6;">
+                {op_name} | {op_address} | {op_email}
+            </div>
+        </div>
+    </div>'''
+
+    footer_text = f"FOXFINDER UNSUBSCRIBE CONFIRMATION | {ts}"
+
+    return subject, _build_email_wrapper(header, body, footer_text,
+                                          border_color=COLORS['text_gray'],
+                                          is_self_notif=False)
 
 
 # Backward compatibility alias (deprecated)
