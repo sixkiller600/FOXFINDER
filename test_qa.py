@@ -155,11 +155,12 @@ from ebay_common import (
     get_smtp_config,
     get_imap_config,
     get_module_info,
+    build_ebay_search_url,
     EBAY_API_BASE,
 )
 
 test("ebay_common VERSION is string", isinstance(EC_VERSION, str))
-test("ebay_common VERSION matches", EC_VERSION == "1.3.0")
+test("ebay_common VERSION matches", EC_VERSION == "1.4.0")
 test("EBAY_API_BASE is https", EBAY_API_BASE.startswith("https://"))
 
 # DST tests - known dates
@@ -262,6 +263,30 @@ test("get_module_info returns dict", isinstance(info, dict))
 test("get_module_info has version", "version" in info)
 test("get_module_info has paths", "paths" in info)
 
+# build_ebay_search_url
+url1 = build_ebay_search_url({"query": "iPhone 15 Pro", "min_price": 500, "max_price": 1000, "condition": "new"})
+test("build_ebay_search_url returns eBay URL", url1.startswith("https://www.ebay.com/sch/i.html?"))
+test("build_ebay_search_url has query", "iPhone" in url1)
+test("build_ebay_search_url has _udlo", "_udlo=500" in url1)
+test("build_ebay_search_url has _udhi", "_udhi=1000" in url1)
+test("build_ebay_search_url has condition", "LH_ItemCondition=1000" in url1)
+test("build_ebay_search_url has BIN default", "LH_BIN=1" in url1)
+
+url2 = build_ebay_search_url({"query": "RTX 4090", "free_shipping_only": True})
+test("build_ebay_search_url free shipping", "LH_FS=1" in url2)
+
+url3 = build_ebay_search_url({"query": "AMD 9950X", "include_auctions": True})
+test("build_ebay_search_url auctions (no BIN)", "LH_BIN" not in url3)
+
+url_empty = build_ebay_search_url({"query": ""})
+test("build_ebay_search_url empty query returns empty", url_empty == "")
+
+url_none = build_ebay_search_url({})
+test("build_ebay_search_url no query returns empty", url_none == "")
+
+url_special = build_ebay_search_url({"query": "test & query <special>"})
+test("build_ebay_search_url encodes special chars", "&" not in url_special.split("_nkw=")[1].split("&")[0] or "%26" in url_special)
+
 
 # ============================================================
 # 3. EMAIL_TEMPLATES TESTS
@@ -283,7 +308,7 @@ from email_templates import (
     EBAY_ATTRIBUTION,
 )
 
-test("email_templates version", ET_VERSION == "2.10.0")
+test("email_templates version", ET_VERSION == "2.11.0")
 test("COLORS is dict", isinstance(COLORS, dict))
 test("CONDITION_BADGES is dict", isinstance(CONDITION_BADGES, dict))
 test("EBAY_ATTRIBUTION is string", isinstance(EBAY_ATTRIBUTION, str))
@@ -484,12 +509,13 @@ from foxfinder import (
     calculate_backoff,
     validate_api_response,
     cleanup_old_seen,
+    _get_cycle_searches,
     SEARCH_RESULTS_LIMIT,
     MAX_SEEN_ENTRIES,
     SEEN_MAX_AGE_DAYS,
 )
 
-test("foxfinder VERSION", FF_VERSION == "4.13.0")
+test("foxfinder VERSION", FF_VERSION == "4.14.0")
 test("SEARCH_RESULTS_LIMIT = 150", SEARCH_RESULTS_LIMIT == 150)
 test("MAX_SEEN_ENTRIES = 50000", MAX_SEEN_ENTRIES == 50000)
 test("SEEN_MAX_AGE_DAYS = 14", SEEN_MAX_AGE_DAYS == 14)
@@ -655,6 +681,88 @@ test("cleanup migrates string entries", isinstance(cleaned.get("str_item"), dict
 # Empty seen
 test("cleanup empty dict", cleanup_old_seen({}) == {})
 
+# _get_cycle_searches - priority pacing
+high_search = {"name": "A", "priority": "high", "enabled": True}
+med_search = {"name": "B", "priority": "medium", "enabled": True}
+norm_search = {"name": "C", "enabled": True}  # no priority = normal
+all_prio = [high_search, med_search, norm_search]
+
+cycle0 = _get_cycle_searches(all_prio, 0)
+test("cycle 0 runs all searches", len(cycle0) == 3)
+
+cycle1 = _get_cycle_searches(all_prio, 1)
+test("cycle 1 runs high+medium only", len(cycle1) == 2)
+test("cycle 1 includes high", high_search in cycle1)
+test("cycle 1 includes medium", med_search in cycle1)
+test("cycle 1 excludes normal", norm_search not in cycle1)
+
+cycle2 = _get_cycle_searches(all_prio, 2)
+test("cycle 2 runs high only", len(cycle2) == 1)
+test("cycle 2 includes high", high_search in cycle2)
+
+# Cycle repeats
+cycle3 = _get_cycle_searches(all_prio, 3)
+test("cycle 3 (=0 mod 3) runs all", len(cycle3) == 3)
+
+# No priorities set → all every cycle
+no_prio = [{"name": "X", "enabled": True}, {"name": "Y", "enabled": True}]
+test("no priority = all every cycle (0)", len(_get_cycle_searches(no_prio, 0)) == 2)
+test("no priority = all every cycle (1)", len(_get_cycle_searches(no_prio, 1)) == 2)
+test("no priority = all every cycle (2)", len(_get_cycle_searches(no_prio, 2)) == 2)
+
+# All high → all every cycle (no filtering needed)
+all_high = [{"name": "A", "priority": "high"}, {"name": "B", "priority": "high"}]
+test("all high cycle 2 = all", len(_get_cycle_searches(all_high, 2)) == 2)
+
+# Fallback: high-only cycle but no high searches → runs all
+only_med = [{"name": "A", "priority": "medium"}, {"name": "B", "priority": "medium"}]
+test("no high for high cycle -> fallback to all", len(_get_cycle_searches(only_med, 2)) == 2)
+
+# validate_config rejects invalid priority
+bad_prio_config = {
+    "api_credentials": {"app_id": "id", "client_secret": "secret"},
+    "email": {"sender": "t@g.com", "password": "p", "recipient": "r@r.com"},
+    "searches": [{"name": "T", "query": "Q", "priority": "ultra"}]
+}
+is_valid_bp, errors_bp = validate_config(bad_prio_config)
+test("invalid priority fails validation", is_valid_bp is False)
+test("priority error mentions valid values", any("high" in e and "medium" in e and "normal" in e for e in errors_bp))
+
+# validate_config accepts valid priorities
+good_prio_config = {
+    "api_credentials": {"app_id": "id", "client_secret": "secret"},
+    "email": {"sender": "t@g.com", "password": "p", "recipient": "r@r.com"},
+    "searches": [
+        {"name": "H", "query": "Q1", "priority": "high"},
+        {"name": "M", "query": "Q2", "priority": "medium"},
+        {"name": "N", "query": "Q3", "priority": "normal"},
+        {"name": "D", "query": "Q4"},  # no priority = default normal
+    ]
+}
+is_valid_gp, errors_gp = validate_config(good_prio_config)
+test("valid priorities pass validation", is_valid_gp is True)
+
+# Data freshness disclaimer in email
+disclaimer_html = get_listing_html("TEST", test_listings)
+test("email has data freshness disclaimer", "Prices as of" in disclaimer_html)
+test("email disclaimer mentions eBay", "current details on eBay" in disclaimer_html)
+
+# Search URL buttons in email
+url_listings = [
+    {"search_name": "RTX 4090", "title": "GPU Card", "link": "#", "price": 1500,
+     "search_url": "https://www.ebay.com/sch/i.html?_nkw=RTX+4090"},
+]
+url_html = get_listing_html("TEST", url_listings)
+test("email has OPEN SEARCH ON EBAY section", "OPEN SEARCH ON EBAY" in url_html)
+test("email has search URL link", "RTX 4090" in url_html)
+
+# No search URLs → no section
+no_url_listings = [
+    {"search_name": "Test", "title": "Item", "link": "#", "price": 100},
+]
+no_url_html = get_listing_html("TEST", no_url_listings)
+test("email without search_url has no OPEN SEARCH section", "OPEN SEARCH ON EBAY" not in no_url_html)
+
 
 # ============================================================
 # 5. CONFIG TEMPLATE VALIDATION
@@ -740,17 +848,17 @@ for sf in secret_files:
 section("Version Consistency")
 
 # Read versions from modules
-test("foxfinder.py version = 4.13.0", FF_VERSION == "4.13.0")
-test("ebay_common.py version = 1.3.0", EC_VERSION == "1.3.0")
-test("email_templates.py version = 2.10.0", ET_VERSION == "2.10.0")
+test("foxfinder.py version = 4.14.0", FF_VERSION == "4.14.0")
+test("ebay_common.py version = 1.4.0", EC_VERSION == "1.4.0")
+test("email_templates.py version = 2.11.0", ET_VERSION == "2.11.0")
 test("shared_utils.py version = 1.2.0", SU_VERSION == "1.2.0")
 
 # Check CHANGELOG mentions these versions
 changelog = (repo_root / "CHANGELOG.md").read_text()
-test("CHANGELOG mentions foxfinder 4.13.0", "4.13.0" in changelog)
-test("CHANGELOG component table has foxfinder.py 4.13.0", "foxfinder.py" in changelog and "4.13.0" in changelog)
-test("CHANGELOG component table has ebay_common.py 1.3.0", "1.3.0" in changelog)
-test("CHANGELOG component table has email_templates.py 2.10.0", "2.10.0" in changelog)
+test("CHANGELOG mentions foxfinder 4.14.0", "4.14.0" in changelog)
+test("CHANGELOG component table has foxfinder.py 4.14.0", "foxfinder.py" in changelog and "4.14.0" in changelog)
+test("CHANGELOG component table has ebay_common.py 1.4.0", "1.4.0" in changelog)
+test("CHANGELOG component table has email_templates.py 2.11.0", "2.11.0" in changelog)
 test("CHANGELOG component table has shared_utils.py 1.2.0", "1.2.0" in changelog)
 
 

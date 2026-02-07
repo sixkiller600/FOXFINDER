@@ -16,7 +16,8 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.10.0"
+__version__ = "2.11.0"
+# v2.11.0: Data freshness disclaimer, "Open Search on eBay" buttons in listing emails
 # v2.10.0: Enhanced invitation email with search preferences, custom message, language
 # v2.9.0: Subscriber invitation, confirmation, and unsubscribe email templates
 # v2.8.0: EPN affiliate disclosure in header (above the fold) per eBay requirements
@@ -381,6 +382,7 @@ def get_listing_html(source_name, listings, updated_listings=None, source_url=No
         <div style="color: {COLORS['text_green']}; font-size: 10px; letter-spacing: 2px;">FOXFINDER</div>
         <div class="header-title" style="color: {COLORS['text_white']}; font-size: 20px; font-weight: bold; margin-top: 5px;">{html.escape(source_name.upper())}</div>
         <div style="color: {COLORS['text_gray']}; font-size: 11px; margin-top: 4px;">{ts} | {len(all_l)+len(upd)} items</div>
+        <div style="color: {COLORS['text_dark']}; font-size: 9px; margin-top: 2px;">Prices as of {ts}. Click items to see current details on eBay.</div>
         {affiliate_notice}
     </div>'''
 
@@ -392,6 +394,30 @@ def get_listing_html(source_name, listings, updated_listings=None, source_url=No
         </tr>
         {rows}
     </table>'''
+
+    # Collect unique search URLs from listings for "Open Search on eBay" buttons
+    search_url_map = {}  # name -> url (preserves insertion order, deduplicates)
+    for item in all_l + upd:
+        sname = item.get('search_name', '')
+        surl = item.get('search_url', '')
+        if sname and surl and sname not in search_url_map:
+            search_url_map[sname] = surl
+
+    if search_url_map:
+        search_buttons = ""
+        for sname, surl in search_url_map.items():
+            safe_name = html.escape(sname)
+            safe_url = html.escape(surl)
+            search_buttons += f'''
+            <a href="{safe_url}" style="display: inline-block; color: {COLORS['ebay_blue']}; text-decoration: none; font-size: 11px; padding: 5px 10px; border: 1px solid {COLORS['border']}; border-radius: 3px; margin: 3px 4px 3px 0;">{safe_name}</a>'''
+
+        body += f'''
+    <div style="padding: 12px 15px; background: {COLORS['bg_row_alt']}; border-top: 1px solid {COLORS['border']};">
+        <div style="color: {COLORS['text_gray']}; font-size: 10px; letter-spacing: 1px; margin-bottom: 8px;">OPEN SEARCH ON EBAY</div>
+        <div style="display: flex; flex-wrap: wrap; gap: 4px;">
+            {search_buttons}
+        </div>
+    </div>'''
 
     return _build_email_wrapper(header, body, "FOXFINDER AUTO-NOTIFICATION", is_self_notif=is_self_notif)
 

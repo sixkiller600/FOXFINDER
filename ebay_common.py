@@ -32,8 +32,9 @@ except ImportError:
 
 # Version
 
-VERSION = "1.3.0"
+VERSION = "1.4.0"
 __version__ = VERSION
+# v1.4.0: Added build_ebay_search_url() for generating eBay search result URLs
 # v1.3.0: Added gmail_cleanup_sent() and get_imap_config() shared functions
 # v1.2.1: Fixed naive datetime bug - tzinfo check moved before branching (prevents TypeError)
 # v1.2.0: DST functions use zoneinfo (system-maintained) with fallback to hardcoded rules
@@ -826,6 +827,65 @@ def get_imap_config(config: Dict[str, Any]) -> Dict[str, Any]:
     elif 'yahoo' in domain:
         return {'host': 'imap.mail.yahoo.com', 'port': 993}
     return {'host': 'imap.gmail.com', 'port': 993}
+
+
+def build_ebay_search_url(search: Dict[str, Any]) -> str:
+    """
+    Build an eBay search results URL from a search config dict.
+
+    Maps config fields to eBay URL parameters:
+    - query → _nkw
+    - min_price/max_price → _udlo/_udhi
+    - condition → LH_ItemCondition
+    - buy_it_now_only/include_auctions → LH_BIN
+    - free_shipping_only → LH_FS
+
+    Returns empty string if query is empty.
+    """
+    import urllib.parse as _up
+
+    query = search.get("query", "").strip()
+    if not query:
+        return ""
+
+    params = {"_nkw": query}
+
+    # Price range
+    min_p = search.get("min_price", 0)
+    max_p = search.get("max_price", 999999)
+    if min_p and min_p > 0:
+        params["_udlo"] = str(int(min_p))
+    if max_p and max_p < 999999:
+        params["_udhi"] = str(int(max_p))
+
+    # Condition mapping (eBay condition IDs for URL)
+    condition = search.get("condition", "").lower()
+    condition_url_map = {
+        "new": "1000",
+        "new_open_box": "1000|1500",
+        "refurbished": "2000|2500",
+        "used": "3000|4000|5000|6000",
+        "used_good": "3000|4000|5000",
+        "any_not_broken": "1000|1500|2000|2500|3000|4000|5000|6000",
+    }
+    if condition in condition_url_map:
+        params["LH_ItemCondition"] = condition_url_map[condition]
+
+    # Buy It Now
+    if "include_auctions" in search:
+        if not search.get("include_auctions", False):
+            params["LH_BIN"] = "1"
+    elif "buy_it_now_only" in search:
+        if search.get("buy_it_now_only", True):
+            params["LH_BIN"] = "1"
+    else:
+        params["LH_BIN"] = "1"  # Default: BIN only (matches API default)
+
+    # Free shipping
+    if search.get("free_shipping_only", False):
+        params["LH_FS"] = "1"
+
+    return f"https://www.ebay.com/sch/i.html?{_up.urlencode(params)}"
 
 
 def gmail_cleanup_sent(sender: str, password: str, subject: str, timeout: int = 30) -> None:

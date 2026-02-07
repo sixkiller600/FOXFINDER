@@ -6,6 +6,38 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.14.0] - 2026-02-07
+
+### Added
+- **"Open Search on eBay" Buttons** — notification emails include styled buttons that open
+  eBay search results with the same filters (query, price, condition, BIN, shipping)
+  - Works via eBay universal links (opens eBay app on mobile)
+  - Deduplicated: one button per unique search in the email
+  - `build_ebay_search_url()` utility in `ebay_common.py`
+- **3-Tier Priority Pacing** — searches can have `"priority": "high" | "medium" | "normal"`
+  - Rotating 3-cycle pattern: ALL → high+medium → high only
+  - High-priority searches checked up to 3x more often within the same daily API budget
+  - Sleep interval adjusts per cycle based on actual search count
+  - Startup log shows priority distribution
+  - `--list-searches` shows PRIORITY column with H/M/N counts
+  - `--dry-run` shows priority labels per search
+  - `--validate` rejects invalid priority values
+  - Fully backwards compatible: no priority set = all searches every cycle
+- **Data Freshness Disclaimer** — "Prices as of [time]. Click items to see current details on eBay."
+  in email header (eBay API License Agreement compliance)
+- **Search URLs in `--dry-run`** — each search shows its generated eBay search URL
+
+### Changed
+- `_enrich_item()` now includes `search_url` field on all enriched items
+- Main loop iterates over cycle-filtered searches instead of all enabled searches
+
+### Version Bumps
+- foxfinder.py: 4.13.0 → 4.14.0
+- ebay_common.py: 1.3.0 → 1.4.0
+- email_templates.py: 2.10.0 → 2.11.0
+
+---
+
 ## [4.13.0] - 2026-02-07
 
 ### Added
@@ -312,10 +344,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 | Component | Version | Description |
 |-----------|---------|-------------|
-| `foxfinder.py` | 4.13.0 | Main application |
+| `foxfinder.py` | 4.14.0 | Main application |
 | `subscriber_manager.py` | 1.1.1 | Subscriber lifecycle management |
-| `email_templates.py` | 2.10.0 | Email templates |
-| `ebay_common.py` | 1.3.0 | Shared utilities |
+| `email_templates.py` | 2.11.0 | Email templates |
+| `ebay_common.py` | 1.4.0 | Shared utilities |
 | `shared_utils.py` | 1.2.0 | Utility functions |
 
 ---

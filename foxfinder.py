@@ -19,8 +19,9 @@ Compliant with:
 For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.13.0"
+VERSION = "4.14.0"
 __version__ = VERSION
+# v4.14.0: Search URL buttons in email, 3-tier priority pacing, data freshness disclaimer
 # v4.13.0: DRY refactoring (_enrich_item, gmail_cleanup_sent), IMAP auto-detect, --dry-run mode
 # v4.12.1: Enhanced subscriber settings (search preferences, custom message, phone, language)
 # v4.12.0: Double opt-in subscriber invitation system (invite, IMAP confirm, unsubscribe)
@@ -72,6 +73,7 @@ from ebay_common import (
     get_last_reset_time_utc, get_minutes_since_reset, is_post_reset_window,
     validate_rate_data, should_force_api_refresh,
     load_config, check_internet, get_smtp_config, gmail_cleanup_sent,
+    build_ebay_search_url,
 )
 
 try:
@@ -636,6 +638,9 @@ def validate_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
                 errors.append(f"Search #{i+1}: missing 'name'")
             if not search.get("query") and not search.get("category_id"):
                 errors.append(f"Search '{search.get('name', f'#{i+1}')}': needs 'query' or 'category_id'")
+            priority = search.get("priority", "normal")
+            if priority not in ("high", "medium", "normal"):
+                errors.append(f"Search '{search.get('name', f'#{i+1}')}': invalid priority '{priority}' (must be high, medium, or normal)")
     return (len(errors) == 0, errors)
 
 
@@ -1071,6 +1076,7 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
                         continue
                     enriched = _enrich_item(item, name)
                     enriched["old_price"] = old_price
+                    enriched["search_url"] = build_ebay_search_url(search)
                     price_drops.append(enriched)
                     seen[item_id] = make_seen_entry(price, title)
             elif price is not None:
@@ -1096,7 +1102,9 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
             if price < min_p or price > effective_max:
                 seen[item_id] = make_seen_entry(price, title)
                 continue
-        new_listings.append(_enrich_item(item, name))
+        enriched = _enrich_item(item, name)
+        enriched["search_url"] = build_ebay_search_url(search)
+        new_listings.append(enriched)
         seen[item_id] = make_seen_entry(price, title)
     return new_listings, price_drops
 
@@ -1247,6 +1255,34 @@ def send_price_drop_email(config: Dict[str, Any], price_drops: List[Dict[str, An
         log(f"EMAIL FAILED: {count} price drop(s) NOT sent!")
 
 
+def _get_cycle_searches(enabled_searches: List[Dict[str, Any]], cycle_position: int) -> List[Dict[str, Any]]:
+    """
+    Select which searches to run based on 3-tier priority pacing.
+
+    Priority levels: "high", "medium", "normal" (default).
+    Cycle pattern (repeats every 3 cycles):
+      - Cycle 0: ALL searches run
+      - Cycle 1: High + medium only
+      - Cycle 2: High only
+
+    If no searches have priority set, all run every cycle (backwards compatible).
+    Falls back to all searches if a filtered cycle would be empty.
+    """
+    has_priorities = any(s.get("priority", "normal") != "normal" for s in enabled_searches)
+    if not has_priorities:
+        return enabled_searches  # No priority configured → all every cycle
+
+    pos = cycle_position % 3
+    if pos == 0:
+        return enabled_searches
+    elif pos == 1:
+        result = [s for s in enabled_searches if s.get("priority", "normal") in ("high", "medium")]
+        return result if result else enabled_searches
+    else:
+        result = [s for s in enabled_searches if s.get("priority", "normal") == "high"]
+        return result if result else enabled_searches
+
+
 def run_foxfinder() -> None:
     log("=" * 50)
     log(f"FoxFinder v{VERSION} starting (Smart Pacing)")
@@ -1276,6 +1312,20 @@ def run_foxfinder() -> None:
         log("=" * 50)
         return
     log("Config validation passed")
+    # Log priority distribution at startup
+    startup_searches = config.get("searches", [])
+    startup_enabled = [s for s in startup_searches if s.get("enabled", True)]
+    priority_counts = {"high": 0, "medium": 0, "normal": 0}
+    for s in startup_enabled:
+        p = s.get("priority", "normal")
+        if p in priority_counts:
+            priority_counts[p] += 1
+        else:
+            priority_counts["normal"] += 1
+    if priority_counts["high"] > 0 or priority_counts["medium"] > 0:
+        log(f"Priority distribution: {priority_counts['high']} high, "
+            f"{priority_counts['medium']} medium, {priority_counts['normal']} normal "
+            f"({len(startup_enabled)} enabled)")
     check_api_updates()
     rate_data = load_rate_state()
     today = get_pacific_date()
@@ -1346,8 +1396,14 @@ def run_foxfinder() -> None:
                 continue
             searches = config.get("searches", [])
             enabled_searches = [s for s in searches if s.get("enabled", True)]
-            search_count = len(enabled_searches)
-            log(f'Cycle start: {search_count}/{len(searches)} searches enabled')
+            cycle_searches = _get_cycle_searches(enabled_searches, cycle_count)
+            search_count = len(cycle_searches)
+            # Build cycle info for log
+            if len(cycle_searches) < len(enabled_searches):
+                tier_label = "high only" if cycle_count % 3 == 2 else "high+medium"
+                log(f'Cycle start: {search_count}/{len(enabled_searches)} searches ({tier_label})')
+            else:
+                log(f'Cycle start: {search_count}/{len(searches)} searches enabled')
             token = get_oauth_token(app_id, client_secret)
             if token is None:
                 log("Failed to get OAuth token. Waiting 60s before retry...")
@@ -1386,9 +1442,7 @@ def run_foxfinder() -> None:
             cycle_start_time = time.time()
             all_new = []
             all_price_drops = []
-            for search in searches:
-                if not search.get("enabled", True):
-                    continue
+            for search in cycle_searches:
                 try:
                     new_l, price_drops = check_search_api(token, search, seen, epn_campaign_id)
                     all_new.extend(new_l)
@@ -1579,7 +1633,12 @@ def run_dry() -> int:
 
     for search in enabled_searches:
         name = search.get("name", "?")
-        print(f"\n--- {name} ---")
+        priority = search.get("priority", "normal").upper()
+        search_url = build_ebay_search_url(search)
+        priority_label = f" [{priority}]" if priority != "NORMAL" else ""
+        print(f"\n--- {name}{priority_label} ---")
+        if search_url:
+            print(f"  Search URL: {search_url}")
         try:
             new_l, price_drops = check_search_api(token, search, seen_copy, epn_campaign_id)
         except Exception as e:
@@ -1734,14 +1793,21 @@ def run_subscriber_command(args) -> int:
         if not searches:
             print("No searches configured.")
             return 0
-        print(f"{'#':<4} {'NAME':<30} {'QUERY':<30} {'ENABLED'}")
+        print(f"{'#':<4} {'NAME':<25} {'QUERY':<25} {'PRIORITY':<10} {'ENABLED'}")
         print("-" * 75)
         for i, s in enumerate(searches, 1):
-            name = s.get('name', '?')[:29]
-            query = s.get('query', '')[:29]
+            name = s.get('name', '?')[:24]
+            query = s.get('query', '')[:24]
+            priority = s.get('priority', 'normal')
             enabled = 'yes' if s.get('enabled', True) else 'no'
-            print(f"{i:<4} {name:<30} {query:<30} {enabled}")
-        print(f"\nTotal: {len(searches)} | Enabled: {len([s for s in searches if s.get('enabled', True)])}")
+            print(f"{i:<4} {name:<25} {query:<25} {priority:<10} {enabled}")
+        enabled_list = [s for s in searches if s.get('enabled', True)]
+        p_counts = {"high": 0, "medium": 0, "normal": 0}
+        for s in enabled_list:
+            p = s.get("priority", "normal")
+            p_counts[p] = p_counts.get(p, 0) + 1
+        print(f"\nTotal: {len(searches)} | Enabled: {len(enabled_list)} "
+              f"| Priority: {p_counts['high']}H {p_counts['medium']}M {p_counts['normal']}N")
         return 0
 
     if args.unsubscribe:
