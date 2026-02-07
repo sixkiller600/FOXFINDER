@@ -34,7 +34,16 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 ### Version Bumps
 - foxfinder.py: 4.13.0 → 4.14.0
 - ebay_common.py: 1.3.0 → 1.4.0
-- email_templates.py: 2.10.0 → 2.11.0
+- email_templates.py: 2.10.0 → 2.12.0
+
+### Seller Reputation Badges (email_templates 2.12.0)
+- Seller line now shows contextual badges based on feedback data:
+  - **★ TOP RATED** (blue) — score ≥ 10,000 and pct ≥ 99.5%
+  - **⚠ LOW RATING** (red) — pct < 95% (score ≥ 50)
+  - **NEW SELLER** (orange) — score < 50 (any pct)
+  - No badge for normal trusted sellers (identical to previous display)
+- Zero extra API calls — uses existing `seller.feedbackPercentage` and `seller.feedbackScore`
+- Safe type coercion handles None, empty strings, and invalid data gracefully
 
 ---
 

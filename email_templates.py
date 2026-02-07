@@ -16,7 +16,8 @@ import html
 import re
 from datetime import datetime
 
-__version__ = "2.11.0"
+__version__ = "2.12.0"
+# v2.12.0: Seller reputation badges (TOP RATED / NEW SELLER / LOW RATING)
 # v2.11.0: Data freshness disclaimer, "Open Search on eBay" buttons in listing emails
 # v2.10.0: Enhanced invitation email with search preferences, custom message, language
 # v2.9.0: Subscriber invitation, confirmation, and unsubscribe email templates
@@ -55,6 +56,12 @@ COLORS = {
     'text_link': '#4af',
     'ebay_blue': '#0064d2',  # Official eBay blue
 }
+
+# Seller reputation badge thresholds
+SELLER_TOP_RATED_MIN_SCORE = 10000   # Feedback count for "TOP RATED"
+SELLER_TOP_RATED_MIN_PCT = 99.5      # Minimum positive % for "TOP RATED"
+SELLER_NEW_MAX_SCORE = 50            # Below this = "NEW SELLER" (pct unreliable)
+SELLER_LOW_RATING_MAX_PCT = 95.0     # Below this = "LOW RATING" warning
 
 # eBay branding (required for API compliance)
 EBAY_ATTRIBUTION = "Powered by eBay Browse API"
@@ -209,6 +216,63 @@ def _get_watchlist_url(item_id):
     if item_id:
         return f"https://www.ebay.com/myb/WatchList?item_id={item_id}"
     return None
+
+
+def _get_seller_badge(seller_pct, seller_score):
+    """Generate seller reputation badge HTML based on feedback data.
+
+    Returns (seller_html, badge_html) tuple. seller_html is the full
+    "Seller: XX% (YYY)" line with color-coded percentage. badge_html
+    is the badge span or empty string. Returns ("", "") if no data.
+
+    Badge priority (first match wins):
+      1. NEW SELLER  — score < 50 (percentage statistically meaningless)
+      2. LOW RATING  — pct < 95%
+      3. TOP RATED   — score >= 10,000 AND pct >= 99.5%
+      4. (no badge)  — normal trusted seller
+    """
+    if not seller_pct and not seller_score:
+        return "", ""
+
+    # Safe type coercion — API may return str, int, float, or None
+    try:
+        pct_val = float(seller_pct) if seller_pct else None
+    except (ValueError, TypeError):
+        pct_val = None
+    try:
+        score_val = int(float(seller_score)) if seller_score else None
+    except (ValueError, TypeError):
+        score_val = None
+
+    # If parsing failed entirely, return plain text (no badge)
+    if pct_val is None and score_val is None:
+        return "", ""
+
+    # Format display strings
+    pct_display = html.escape(str(seller_pct))
+    score_display = html.escape(f"{score_val:,}") if score_val is not None else html.escape(str(seller_score))
+
+    # Determine badge
+    badge_html = ""
+    pct_color = COLORS['text_gray']  # default: neutral gray
+
+    if score_val is not None and score_val < SELLER_NEW_MAX_SCORE:
+        badge_html = f'<span style="display: inline-block; padding: 1px 4px; margin-left: 3px; font-size: 8px; font-weight: bold; background: #ff9800; color: #000; border-radius: 2px; letter-spacing: 0.5px;">NEW SELLER</span>'
+        pct_color = '#ff9800'
+    elif pct_val is not None and pct_val < SELLER_LOW_RATING_MAX_PCT:
+        badge_html = f'<span style="display: inline-block; padding: 1px 4px; margin-left: 3px; font-size: 8px; font-weight: bold; background: #f44336; color: #fff; border-radius: 2px; letter-spacing: 0.5px;">\u26a0 LOW RATING</span>'
+        pct_color = '#f44336'
+    elif (score_val is not None and score_val >= SELLER_TOP_RATED_MIN_SCORE and
+          pct_val is not None and pct_val >= SELLER_TOP_RATED_MIN_PCT):
+        badge_html = f'<span style="display: inline-block; padding: 1px 4px; margin-left: 3px; font-size: 8px; font-weight: bold; background: {COLORS["ebay_blue"]}; color: #fff; border-radius: 2px; letter-spacing: 0.5px;">\u2605 TOP RATED</span>'
+        pct_color = '#00a650'
+
+    # Build seller line
+    pct_part = f'<span style="color: {pct_color};">{pct_display}%</span>' if pct_val is not None else ''
+    score_part = f' ({score_display})' if score_val is not None else ''
+    seller_html = f'<div style="font-size: 9px; color: {COLORS["text_gray"]}; margin-top: 2px;">Seller: {pct_part}{score_part}{badge_html}</div>'
+
+    return seller_html, badge_html
 
 
 def _build_email_wrapper(header_html, body_html, footer_text, border_color=None, is_self_notif=True):
@@ -480,12 +544,10 @@ def _build_listing_row(item, is_update=False):
     elif shipping_cost:
         shipping_html = f'<div style="font-size: 9px; color: {COLORS["text_gray"]}; margin-top: 2px;">Ship: {html.escape(shipping_cost)}</div>'
 
-    # Seller feedback display
+    # Seller feedback display with reputation badge
     seller_pct = item.get('seller_feedback_pct', '')
     seller_score = item.get('seller_feedback_score', '')
-    seller_html = ""
-    if seller_pct and seller_score:
-        seller_html = f'<div style="font-size: 9px; color: {COLORS["text_gray"]}; margin-top: 2px;">Seller: {html.escape(str(seller_pct))}% ({html.escape(str(seller_score))})</div>'
+    seller_html, _ = _get_seller_badge(seller_pct, seller_score)
 
     info_html = ""
     if condition_badge:
