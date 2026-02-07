@@ -355,7 +355,7 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 |-----------|---------|-------------|
 | `foxfinder.py` | 4.14.0 | Main application |
 | `subscriber_manager.py` | 1.1.1 | Subscriber lifecycle management |
-| `email_templates.py` | 2.11.0 | Email templates |
+| `email_templates.py` | 2.12.0 | Email templates |
 | `ebay_common.py` | 1.4.0 | Shared utilities |
 | `shared_utils.py` | 1.2.0 | Utility functions |
 

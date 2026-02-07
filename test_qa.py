@@ -308,7 +308,7 @@ from email_templates import (
     EBAY_ATTRIBUTION,
 )
 
-test("email_templates version", ET_VERSION == "2.11.0")
+test("email_templates version", ET_VERSION == "2.12.0")
 test("COLORS is dict", isinstance(COLORS, dict))
 test("CONDITION_BADGES is dict", isinstance(CONDITION_BADGES, dict))
 test("EBAY_ATTRIBUTION is string", isinstance(EBAY_ATTRIBUTION, str))
@@ -427,7 +427,7 @@ test("enriched HTML has <img tag", "<img " in enriched_html)
 test("enriched HTML has image src", "s-l225.jpg" in enriched_html)
 test("enriched HTML has FREE SHIPPING", "FREE SHIPPING" in enriched_html)
 test("enriched HTML has Seller feedback", "Seller:" in enriched_html and "99.2%" in enriched_html)
-test("enriched HTML has feedback score", "2450" in enriched_html)
+test("enriched HTML has feedback score", "2,450" in enriched_html)
 
 # Shipping cost with dollar amount
 ship_cost_listings = [
@@ -465,13 +465,13 @@ try:
 except Exception as e:
     test("empty enrichment fields render OK", False, str(e))
 
-# Partial seller feedback (only pct, no score) - should not render
+# Partial seller feedback (only pct, no score) - renders pct without score
 partial_seller = [
     {"search_name": "T", "title": "Partial Seller", "link": "#", "price": 100,
      "seller_feedback_pct": "98.5", "seller_feedback_score": ""}
 ]
 partial_html = get_listing_html("TEST", partial_seller)
-test("partial seller feedback not rendered", "Seller:" not in partial_html)
+test("partial seller feedback renders pct", "Seller:" in partial_html and "98.5%" in partial_html)
 
 # XSS prevention (HTML escaping)
 xss_listings = [{"search_name": "XSS", "title": '<script>alert("xss")</script>', "link": "https://ebay.com/itm/123456789012", "price": 100}]
@@ -850,7 +850,7 @@ section("Version Consistency")
 # Read versions from modules
 test("foxfinder.py version = 4.14.0", FF_VERSION == "4.14.0")
 test("ebay_common.py version = 1.4.0", EC_VERSION == "1.4.0")
-test("email_templates.py version = 2.11.0", ET_VERSION == "2.11.0")
+test("email_templates.py version = 2.12.0", ET_VERSION == "2.12.0")
 test("shared_utils.py version = 1.2.0", SU_VERSION == "1.2.0")
 
 # Check CHANGELOG mentions these versions
@@ -858,7 +858,7 @@ changelog = (repo_root / "CHANGELOG.md").read_text()
 test("CHANGELOG mentions foxfinder 4.14.0", "4.14.0" in changelog)
 test("CHANGELOG component table has foxfinder.py 4.14.0", "foxfinder.py" in changelog and "4.14.0" in changelog)
 test("CHANGELOG component table has ebay_common.py 1.4.0", "1.4.0" in changelog)
-test("CHANGELOG component table has email_templates.py 2.11.0", "2.11.0" in changelog)
+test("CHANGELOG component table has email_templates.py 2.12.0", "2.12.0" in changelog)
 test("CHANGELOG component table has shared_utils.py 1.2.0", "1.2.0" in changelog)
 
 
