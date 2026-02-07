@@ -153,12 +153,13 @@ from ebay_common import (
     validate_rate_data,
     get_seconds_until_reset,
     get_smtp_config,
+    get_imap_config,
     get_module_info,
     EBAY_API_BASE,
 )
 
 test("ebay_common VERSION is string", isinstance(EC_VERSION, str))
-test("ebay_common VERSION matches", EC_VERSION == "1.2.1")
+test("ebay_common VERSION matches", EC_VERSION == "1.3.0")
 test("EBAY_API_BASE is https", EBAY_API_BASE.startswith("https://"))
 
 # DST tests - known dates
@@ -244,6 +245,17 @@ yahoo_config = {"email": {"sender": "test@yahoo.com", "password": "pass", "recip
 smtp3 = get_smtp_config(yahoo_config)
 test("Yahoo SMTP host auto-detected", smtp3["host"] == "smtp.mail.yahoo.com")
 
+# get_imap_config
+imap_gmail = get_imap_config(gmail_config)
+test("Gmail IMAP host correct", imap_gmail["host"] == "imap.gmail.com")
+test("Gmail IMAP port correct", imap_gmail["port"] == 993)
+
+imap_outlook = get_imap_config(outlook_config)
+test("Outlook IMAP host auto-detected", imap_outlook["host"] == "outlook.office365.com")
+
+imap_yahoo = get_imap_config(yahoo_config)
+test("Yahoo IMAP host auto-detected", imap_yahoo["host"] == "imap.mail.yahoo.com")
+
 # get_module_info
 info = get_module_info()
 test("get_module_info returns dict", isinstance(info, dict))
@@ -271,7 +283,7 @@ from email_templates import (
     EBAY_ATTRIBUTION,
 )
 
-test("email_templates version", ET_VERSION == "2.6.0")
+test("email_templates version", ET_VERSION == "2.10.0")
 test("COLORS is dict", isinstance(COLORS, dict))
 test("CONDITION_BADGES is dict", isinstance(CONDITION_BADGES, dict))
 test("EBAY_ATTRIBUTION is string", isinstance(EBAY_ATTRIBUTION, str))
@@ -477,7 +489,7 @@ from foxfinder import (
     SEEN_MAX_AGE_DAYS,
 )
 
-test("foxfinder VERSION", FF_VERSION == "4.9.0")
+test("foxfinder VERSION", FF_VERSION == "4.13.0")
 test("SEARCH_RESULTS_LIMIT = 150", SEARCH_RESULTS_LIMIT == 150)
 test("MAX_SEEN_ENTRIES = 50000", MAX_SEEN_ENTRIES == 50000)
 test("SEEN_MAX_AGE_DAYS = 14", SEEN_MAX_AGE_DAYS == 14)
@@ -728,17 +740,17 @@ for sf in secret_files:
 section("Version Consistency")
 
 # Read versions from modules
-test("foxfinder.py version = 4.9.0", FF_VERSION == "4.9.0")
-test("ebay_common.py version = 1.2.1", EC_VERSION == "1.2.1")
-test("email_templates.py version = 2.6.0", ET_VERSION == "2.6.0")
+test("foxfinder.py version = 4.13.0", FF_VERSION == "4.13.0")
+test("ebay_common.py version = 1.3.0", EC_VERSION == "1.3.0")
+test("email_templates.py version = 2.10.0", ET_VERSION == "2.10.0")
 test("shared_utils.py version = 1.2.0", SU_VERSION == "1.2.0")
 
 # Check CHANGELOG mentions these versions
 changelog = (repo_root / "CHANGELOG.md").read_text()
-test("CHANGELOG mentions foxfinder 4.9.0", "4.9.0" in changelog)
-test("CHANGELOG component table has foxfinder.py 4.9.0", "foxfinder.py" in changelog and "4.9.0" in changelog)
-test("CHANGELOG component table has ebay_common.py 1.2.1", "1.2.1" in changelog)
-test("CHANGELOG component table has email_templates.py 2.6.0", "2.6.0" in changelog)
+test("CHANGELOG mentions foxfinder 4.13.0", "4.13.0" in changelog)
+test("CHANGELOG component table has foxfinder.py 4.13.0", "foxfinder.py" in changelog and "4.13.0" in changelog)
+test("CHANGELOG component table has ebay_common.py 1.3.0", "1.3.0" in changelog)
+test("CHANGELOG component table has email_templates.py 2.10.0", "2.10.0" in changelog)
 test("CHANGELOG component table has shared_utils.py 1.2.0", "1.2.0" in changelog)
 
 

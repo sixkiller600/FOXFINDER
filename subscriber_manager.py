@@ -15,7 +15,7 @@ Compliant with:
 - CAN-SPAM (physical address, opt-out mechanism)
 """
 
-__version__ = "1.1.0"
+__version__ = "1.1.1"
 
 import json
 import imaplib
@@ -27,7 +27,7 @@ from email.mime.multipart import MIMEMultipart
 from pathlib import Path
 from typing import Dict, List, Any, Optional, Tuple
 
-from ebay_common import SCRIPT_DIR, log, get_smtp_config
+from ebay_common import SCRIPT_DIR, log, get_smtp_config, get_imap_config, gmail_cleanup_sent
 
 SUBSCRIBERS_FILE = SCRIPT_DIR / "foxfinder_subscribers.json"
 
@@ -115,28 +115,7 @@ def _send_to_single_recipient(config: Dict[str, Any], recipient_email: str,
 
         # Gmail cleanup: delete from Sent Mail to keep inbox clean
         if smtp_cfg['host'] == 'smtp.gmail.com':
-            try:
-                imap = imaplib.IMAP4_SSL("imap.gmail.com", timeout=30)
-                imap.login(sender, password)
-                imap.select('"[Gmail]/Sent Mail"')
-                safe_subject = subject.replace('\\', '\\\\').replace('"', '\\"')
-                _, msgs = imap.search(None, f'SUBJECT "{safe_subject}"')
-                if msgs[0]:
-                    for m in msgs[0].split():
-                        imap.store(m, "+FLAGS", "\\Deleted")
-                    imap.expunge()
-                try:
-                    imap.select('"[Gmail]/Trash"')
-                    _, msgs = imap.search(None, f'SUBJECT "{safe_subject}"')
-                    if msgs[0]:
-                        for m in msgs[0].split():
-                            imap.store(m, "+FLAGS", "\\Deleted")
-                        imap.expunge()
-                except (imaplib.IMAP4.error, OSError):
-                    pass
-                imap.logout()
-            except Exception as imap_err:
-                log(f"IMAP cleanup note (email sent OK): {imap_err}")
+            gmail_cleanup_sent(sender, password, subject, timeout=30)
 
         log(f"Subscriber email sent: {subject} -> {recipient_email}")
         return True
@@ -271,7 +250,8 @@ def check_confirmations(config: Dict[str, Any]) -> int:
     actions_processed = 0
 
     try:
-        imap = imaplib.IMAP4_SSL("imap.gmail.com", timeout=30)
+        imap_cfg = get_imap_config(config)
+        imap = imaplib.IMAP4_SSL(imap_cfg['host'], timeout=30)
         imap.login(sender, password)
         imap.select("INBOX")
 

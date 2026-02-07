@@ -19,8 +19,9 @@ Compliant with:
 For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.12.1"
+VERSION = "4.13.0"
 __version__ = VERSION
+# v4.13.0: DRY refactoring (_enrich_item, gmail_cleanup_sent), IMAP auto-detect, --dry-run mode
 # v4.12.1: Enhanced subscriber settings (search preferences, custom message, phone, language)
 # v4.12.0: Double opt-in subscriber invitation system (invite, IMAP confirm, unsubscribe)
 # v4.11.0: EPN affiliate disclosure in email header per eBay Partner Network requirements
@@ -70,7 +71,7 @@ from ebay_common import (
     create_fresh_rate_state, load_rate_state, save_rate_state, get_seconds_until_reset,
     get_last_reset_time_utc, get_minutes_since_reset, is_post_reset_window,
     validate_rate_data, should_force_api_refresh,
-    load_config, check_internet, get_smtp_config,
+    load_config, check_internet, get_smtp_config, gmail_cleanup_sent,
 )
 
 try:
@@ -885,6 +886,77 @@ def title_matches_query(title: str, search: Dict[str, Any]) -> bool:
     return True
 
 
+def _enrich_item(item: Dict[str, Any], search_name: str) -> Dict[str, Any]:
+    """Extract common display fields from a raw eBay API item dict."""
+    title = item.get("title", "")
+    link = item.get("itemAffiliateWebUrl") or item.get("itemWebUrl", "")
+    price_info = item.get("price", {})
+    price: Optional[float] = None
+    if price_info:
+        try:
+            price = float(price_info.get("value", 0))
+        except (ValueError, TypeError):
+            pass
+    buying_options = item.get("buyingOptions", [])
+    has_best_offer = "BEST_OFFER" in buying_options
+    item_id = item.get("itemId", "")
+
+    created_utc = item.get("itemCreationDate", "")
+    created_israel, created_usa, listing_age = "", "", ""
+    if created_utc:
+        try:
+            dt_utc = datetime.fromisoformat(created_utc.replace('Z', '+00:00'))
+            israel_offset = 3 if is_israel_dst(dt_utc) else 2
+            dt_israel = dt_utc + timedelta(hours=israel_offset)
+            created_israel = dt_israel.strftime("%I:%M %p").lstrip('0')
+            us_offset = -7 if is_us_pacific_dst(dt_utc) else -8
+            dt_usa = dt_utc + timedelta(hours=us_offset)
+            created_usa = dt_usa.strftime("%I:%M %p").lstrip('0')
+            now_utc = datetime.now(timezone.utc)
+            age_delta = now_utc - dt_utc
+            age_minutes = int(age_delta.total_seconds() / 60)
+            if age_minutes < 60:
+                listing_age = f"{age_minutes}m ago"
+            elif age_minutes < 1440:
+                listing_age = f"{age_minutes // 60}h ago"
+            else:
+                listing_age = f"{age_minutes // 1440}d ago"
+        except Exception:
+            pass
+
+    location_info = item.get("itemLocation", {})
+    item_state = location_info.get("stateOrProvince", "")
+    item_location = f"{item_state}, {location_info.get('country', '')}" if item_state else location_info.get("country", "")
+    item_condition = item.get("condition", "")
+    image_url = item.get("image", {}).get("imageUrl", "")
+    shipping_cost = ""
+    try:
+        shipping_options = item.get("shippingOptions", [])
+        if shipping_options:
+            cost_info = shipping_options[0].get("shippingCost", {})
+            cost_val = cost_info.get("value", "")
+            if cost_val in ("0.00", "0"):
+                shipping_cost = "FREE"
+            elif cost_val:
+                shipping_cost = f"${float(cost_val):,.2f}"
+    except (ValueError, TypeError, IndexError):
+        pass
+    seller_info = item.get("seller", {})
+    seller_feedback_pct = seller_info.get("feedbackPercentage", "")
+    seller_feedback_score = seller_info.get("feedbackScore", "")
+
+    return {
+        "search_name": search_name, "title": title, "link": link,
+        "price": price, "best_offer": has_best_offer, "id": item_id,
+        "created_il": created_israel, "created_us": created_usa,
+        "listing_age": listing_age, "location": item_location,
+        "condition": item_condition,
+        "image_url": image_url, "shipping_cost": shipping_cost,
+        "seller_feedback_pct": seller_feedback_pct,
+        "seller_feedback_score": seller_feedback_score,
+    }
+
+
 def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], epn_campaign_id: str = None) -> Tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
     query = search.get("query")
     if not query:
@@ -997,63 +1069,9 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
                     if any(w in title.lower() for w in exclude):
                         seen[item_id] = make_seen_entry(price, title)
                         continue
-                    buying_options = item.get("buyingOptions", [])
-                    has_best_offer = "BEST_OFFER" in buying_options
-                    created_utc = item.get("itemCreationDate", "")
-                    created_israel, created_usa, listing_age = "", "", ""
-                    if created_utc:
-                        try:
-                            dt_utc = datetime.fromisoformat(created_utc.replace('Z', '+00:00'))
-                            israel_offset = 3 if is_israel_dst(dt_utc) else 2
-                            dt_israel = dt_utc + timedelta(hours=israel_offset)
-                            created_israel = dt_israel.strftime("%I:%M %p").lstrip('0')
-                            us_offset = -7 if is_us_pacific_dst(dt_utc) else -8
-                            dt_usa = dt_utc + timedelta(hours=us_offset)
-                            created_usa = dt_usa.strftime("%I:%M %p").lstrip('0')
-                            now_utc = datetime.now(timezone.utc)
-                            age_delta = now_utc - dt_utc
-                            age_minutes = int(age_delta.total_seconds() / 60)
-                            if age_minutes < 60:
-                                listing_age = f"{age_minutes}m ago"
-                            elif age_minutes < 1440:
-                                listing_age = f"{age_minutes // 60}h ago"
-                            else:
-                                listing_age = f"{age_minutes // 1440}d ago"
-                        except Exception:
-                            pass
-                    location_info = item.get("itemLocation", {})
-                    item_state = location_info.get("stateOrProvince", "")
-                    item_location = f"{item_state}, {location_info.get('country', '')}" if item_state else location_info.get("country", "")
-                    # eBay Growth Check: Must indicate when item is not new - include condition
-                    item_condition = item.get("condition", "")
-                    # Browse API enrichment fields
-                    image_url = item.get("image", {}).get("imageUrl", "")
-                    shipping_cost = ""
-                    try:
-                        shipping_options = item.get("shippingOptions", [])
-                        if shipping_options:
-                            cost_info = shipping_options[0].get("shippingCost", {})
-                            cost_val = cost_info.get("value", "")
-                            if cost_val in ("0.00", "0"):
-                                shipping_cost = "FREE"
-                            elif cost_val:
-                                shipping_cost = f"${float(cost_val):,.2f}"
-                    except (ValueError, TypeError, IndexError):
-                        pass
-                    seller_info = item.get("seller", {})
-                    seller_feedback_pct = seller_info.get("feedbackPercentage", "")
-                    seller_feedback_score = seller_info.get("feedbackScore", "")
-                    price_drops.append({
-                        "search_name": name, "title": title, "link": link,
-                        "price": price, "old_price": old_price,
-                        "best_offer": has_best_offer, "id": item_id,
-                        "created_il": created_israel, "created_us": created_usa,
-                        "listing_age": listing_age, "location": item_location,
-                        "condition": item_condition,
-                        "image_url": image_url, "shipping_cost": shipping_cost,
-                        "seller_feedback_pct": seller_feedback_pct,
-                        "seller_feedback_score": seller_feedback_score
-                    })
+                    enriched = _enrich_item(item, name)
+                    enriched["old_price"] = old_price
+                    price_drops.append(enriched)
                     seen[item_id] = make_seen_entry(price, title)
             elif price is not None:
                 seen[item_id] = make_seen_entry(price, title)
@@ -1078,53 +1096,7 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
             if price < min_p or price > effective_max:
                 seen[item_id] = make_seen_entry(price, title)
                 continue
-        created_utc = item.get("itemCreationDate", "")
-        created_israel = ""
-        created_usa = ""
-        listing_age = ""
-        if created_utc:
-            try:
-                dt_utc = datetime.fromisoformat(created_utc.replace('Z', '+00:00'))
-                israel_offset = 3 if is_israel_dst(dt_utc) else 2
-                dt_israel = dt_utc + timedelta(hours=israel_offset)
-                created_israel = dt_israel.strftime("%I:%M %p").lstrip('0')
-                us_offset = -7 if is_us_pacific_dst(dt_utc) else -8
-                dt_usa = dt_utc + timedelta(hours=us_offset)
-                created_usa = dt_usa.strftime("%I:%M %p").lstrip('0')
-                now_utc = datetime.now(timezone.utc)
-                age_delta = now_utc - dt_utc
-                age_minutes = int(age_delta.total_seconds() / 60)
-                if age_minutes < 60:
-                    listing_age = f"{age_minutes}m ago"
-                elif age_minutes < 1440:
-                    listing_age = f"{age_minutes // 60}h ago"
-                else:
-                    listing_age = f"{age_minutes // 1440}d ago"
-            except Exception:
-                pass
-        location_info = item.get("itemLocation", {})
-        item_state = location_info.get("stateOrProvince", "")
-        item_location = f"{item_state}, {location_info.get('country', '')}" if item_state else location_info.get("country", "")
-        # eBay Growth Check: Must indicate when item is not new - include condition field
-        item_condition = item.get("condition", "")
-        # Browse API enrichment fields
-        image_url = item.get("image", {}).get("imageUrl", "")
-        shipping_cost = ""
-        try:
-            shipping_options = item.get("shippingOptions", [])
-            if shipping_options:
-                cost_info = shipping_options[0].get("shippingCost", {})
-                cost_val = cost_info.get("value", "")
-                if cost_val in ("0.00", "0"):
-                    shipping_cost = "FREE"
-                elif cost_val:
-                    shipping_cost = f"${float(cost_val):,.2f}"
-        except (ValueError, TypeError, IndexError):
-            pass
-        seller_info = item.get("seller", {})
-        seller_feedback_pct = seller_info.get("feedbackPercentage", "")
-        seller_feedback_score = seller_info.get("feedbackScore", "")
-        new_listings.append({"search_name": name, "title": title, "link": link, "price": price, "best_offer": has_best_offer, "id": item_id, "created_il": created_israel, "created_us": created_usa, "listing_age": listing_age, "location": item_location, "condition": item_condition, "image_url": image_url, "shipping_cost": shipping_cost, "seller_feedback_pct": seller_feedback_pct, "seller_feedback_score": seller_feedback_score})
+        new_listings.append(_enrich_item(item, name))
         seen[item_id] = make_seen_entry(price, title)
     return new_listings, price_drops
 
@@ -1162,28 +1134,7 @@ def send_email_core(config: Dict[str, Any], subject: str, body: str, is_html: bo
         server.sendmail(sender, recipients, msg.as_string())
         server.quit()
         if smtp_cfg['host'] == 'smtp.gmail.com':
-            try:
-                imap = imaplib.IMAP4_SSL("imap.gmail.com", timeout=SMTP_TIMEOUT_SECONDS)
-                imap.login(sender, password)
-                imap.select('"[Gmail]/Sent Mail"')
-                safe_subject = subject.replace('\\', '\\\\').replace('"', '\\"')
-                _, msgs = imap.search(None, f'SUBJECT "{safe_subject}"')
-                if msgs[0]:
-                    for m in msgs[0].split():
-                        imap.store(m, "+FLAGS", "\\Deleted")
-                    imap.expunge()
-                try:
-                    imap.select('"[Gmail]/Trash"')
-                    _, msgs = imap.search(None, f'SUBJECT "{safe_subject}"')
-                    if msgs[0]:
-                        for m in msgs[0].split():
-                            imap.store(m, "+FLAGS", "\\Deleted")
-                        imap.expunge()
-                except (imaplib.IMAP4.error, OSError):
-                    pass
-                imap.logout()
-            except Exception as imap_err:
-                log(f"IMAP cleanup failed (email still sent): {imap_err}")
+            gmail_cleanup_sent(sender, password, subject, timeout=SMTP_TIMEOUT_SECONDS)
         log(f"Email sent: {subject} ({len(recipients)} recipient(s))")
         clear_email_failures()
         return True
@@ -1585,6 +1536,93 @@ def run_validate() -> int:
     return 0
 
 
+def run_dry() -> int:
+    """Run one search cycle without sending emails or updating state files."""
+    print(f"FoxFinder v{VERSION} - DRY RUN MODE")
+    print("=" * 60)
+
+    config = load_config()
+    if not config:
+        print("FAIL: Could not load ebay_config.json")
+        return 1
+
+    is_valid, errors = validate_config(config)
+    if not is_valid:
+        print(f"FAIL: Config validation ({len(errors)} error(s)):")
+        for err in errors:
+            print(f"  - {err}")
+        return 1
+    print("OK: Config valid")
+
+    creds = config.get("api_credentials", {})
+    app_id = creds.get("app_id")
+    client_secret = creds.get("client_secret")
+    epn_campaign_id = creds.get("epn_campaign_id")
+
+    token = get_oauth_token(app_id, client_secret)
+    if token is None:
+        print("FAIL: Could not get OAuth token")
+        return 1
+    print("OK: OAuth token acquired")
+
+    searches = config.get("searches", [])
+    enabled_searches = [s for s in searches if s.get("enabled", True)]
+    print(f"OK: {len(enabled_searches)}/{len(searches)} searches enabled")
+    print("=" * 60)
+
+    # Use a copy of seen so we don't modify the real file
+    seen = load_seen()
+    seen_copy = dict(seen)
+
+    total_new = 0
+    total_drops = 0
+
+    for search in enabled_searches:
+        name = search.get("name", "?")
+        print(f"\n--- {name} ---")
+        try:
+            new_l, price_drops = check_search_api(token, search, seen_copy, epn_campaign_id)
+        except Exception as e:
+            print(f"  ERROR: {e}")
+            continue
+
+        if new_l:
+            print(f"  New listings: {len(new_l)}")
+            for item in new_l[:5]:
+                p = item.get('price')
+                price_str = f"${p:,.2f}" if p else "N/A"
+                print(f"    {price_str:>10}  {item.get('title', '')[:60]}")
+            if len(new_l) > 5:
+                print(f"    ... and {len(new_l) - 5} more")
+            total_new += len(new_l)
+        else:
+            print("  New listings: 0")
+
+        if price_drops:
+            print(f"  Price drops: {len(price_drops)}")
+            for item in price_drops[:5]:
+                old_p = item.get('old_price', 0)
+                new_p = item.get('price', 0)
+                print(f"    ${old_p:,.2f} -> ${new_p:,.2f}  {item.get('title', '')[:50]}")
+            if len(price_drops) > 5:
+                print(f"    ... and {len(price_drops) - 5} more")
+            total_drops += len(price_drops)
+        else:
+            print("  Price drops: 0")
+
+    print("\n" + "=" * 60)
+    print(f"SUMMARY (DRY RUN - no emails sent, no state updated)")
+    print(f"  Searches run:  {len(enabled_searches)}")
+    print(f"  New listings:  {total_new}")
+    print(f"  Price drops:   {total_drops}")
+    if total_new > 0:
+        print(f"  Would send email: {total_new} new listing(s)")
+    if total_drops > 0:
+        print(f"  Would send email: {total_drops} price drop(s)")
+    print("=" * 60)
+    return 0
+
+
 def _resolve_searches(searches_str: str, config: Dict[str, Any]) -> Optional[List[str]]:
     """
     Resolve --searches CLI input to a list of search name strings.
@@ -1778,6 +1816,8 @@ if __name__ == "__main__":
     )
     parser.add_argument("--validate", "-v", action="store_true",
                         help="Validate configuration and exit")
+    parser.add_argument("--dry-run", action="store_true",
+                        help="Run one search cycle, print results, no email/state changes")
     # Subscriber commands
     parser.add_argument("--invite", nargs='+', metavar=("EMAIL", "NAME"),
                         help="Invite a subscriber: --invite email@example.com \"John Doe\"")
@@ -1807,6 +1847,10 @@ if __name__ == "__main__":
     # Handle validate
     if args.validate:
         sys.exit(run_validate())
+
+    # Handle dry run
+    if args.dry_run:
+        sys.exit(run_dry())
 
     # Handle subscriber commands
     if any([args.invite, args.update_subscriber, args.list_searches,

@@ -32,8 +32,9 @@ except ImportError:
 
 # Version
 
-VERSION = "1.2.1"
+VERSION = "1.3.0"
 __version__ = VERSION
+# v1.3.0: Added gmail_cleanup_sent() and get_imap_config() shared functions
 # v1.2.1: Fixed naive datetime bug - tzinfo check moved before branching (prevents TypeError)
 # v1.2.0: DST functions use zoneinfo (system-maintained) with fallback to hardcoded rules
 # v1.1.0: Robust rate limit system - post-reset validation, sanity checks, retry logic
@@ -814,6 +815,47 @@ def get_smtp_config(config: Dict[str, Any]) -> Dict[str, Any]:
         'password': email_cfg.get("password", ""),
         'recipient': email_cfg.get("recipient", "")
     }
+
+
+def get_imap_config(config: Dict[str, Any]) -> Dict[str, Any]:
+    """Get IMAP configuration, auto-detecting provider from sender email domain."""
+    sender = config.get("email", {}).get("sender", "")
+    domain = sender.split('@')[-1].lower() if '@' in sender else ""
+    if 'outlook' in domain or 'hotmail' in domain or 'live' in domain:
+        return {'host': 'outlook.office365.com', 'port': 993}
+    elif 'yahoo' in domain:
+        return {'host': 'imap.mail.yahoo.com', 'port': 993}
+    return {'host': 'imap.gmail.com', 'port': 993}
+
+
+def gmail_cleanup_sent(sender: str, password: str, subject: str, timeout: int = 30) -> None:
+    """Delete sent email from Gmail Sent Mail and Trash to keep inbox clean.
+
+    Silently returns on any error (non-critical cleanup operation).
+    """
+    import imaplib
+    try:
+        imap = imaplib.IMAP4_SSL("imap.gmail.com", timeout=timeout)
+        imap.login(sender, password)
+        imap.select('"[Gmail]/Sent Mail"')
+        safe_subject = subject.replace('\\', '\\\\').replace('"', '\\"')
+        _, msgs = imap.search(None, f'SUBJECT "{safe_subject}"')
+        if msgs[0]:
+            for m in msgs[0].split():
+                imap.store(m, "+FLAGS", "\\Deleted")
+            imap.expunge()
+        try:
+            imap.select('"[Gmail]/Trash"')
+            _, msgs = imap.search(None, f'SUBJECT "{safe_subject}"')
+            if msgs[0]:
+                for m in msgs[0].split():
+                    imap.store(m, "+FLAGS", "\\Deleted")
+                imap.expunge()
+        except (imaplib.IMAP4.error, OSError):
+            pass
+        imap.logout()
+    except Exception:
+        pass  # Non-critical cleanup
 
 
 # Module Info

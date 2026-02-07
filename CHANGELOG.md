@@ -6,6 +6,32 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.13.0] - 2026-02-07
+
+### Added
+- **`--dry-run` Mode** — run one search cycle, print results to console, no email sent, no state files updated
+  - Useful for testing config changes, validating searches, and debugging
+  - Reports item counts and sample titles/prices per search
+  - Uses 1 API call per enabled search (same as a normal cycle)
+
+### Changed
+- **DRY Refactoring: `_enrich_item()` helper** — extracted duplicated 40-line item enrichment block
+  (timezone, shipping, seller, condition, image) from price-drop and new-listing paths into a single helper
+- **DRY Refactoring: `gmail_cleanup_sent()`** — extracted duplicated Gmail IMAP Sent/Trash cleanup
+  from `foxfinder.py:send_email_core` and `subscriber_manager.py:_send_to_single_recipient` into
+  `ebay_common.py`
+- **IMAP Provider Auto-Detect** — `get_imap_config()` in `ebay_common.py` auto-detects
+  Gmail/Outlook/Yahoo IMAP hosts from sender email domain (mirrors existing SMTP auto-detect)
+  - `check_confirmations()` in subscriber_manager.py now uses auto-detected IMAP host
+
+### Version Bumps
+- foxfinder.py: 4.12.1 → 4.13.0
+- ebay_common.py: 1.2.1 → 1.3.0
+- subscriber_manager.py: 1.1.0 → 1.1.1
+- test_qa.py: updated version assertions to match current versions
+
+---
+
 ## [4.12.1] - 2026-02-06
 
 ### Added
@@ -286,10 +312,10 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 | Component | Version | Description |
 |-----------|---------|-------------|
-| `foxfinder.py` | 4.12.1 | Main application |
-| `subscriber_manager.py` | 1.1.0 | Subscriber lifecycle management |
+| `foxfinder.py` | 4.13.0 | Main application |
+| `subscriber_manager.py` | 1.1.1 | Subscriber lifecycle management |
 | `email_templates.py` | 2.10.0 | Email templates |
-| `ebay_common.py` | 1.2.1 | Shared utilities |
+| `ebay_common.py` | 1.3.0 | Shared utilities |
 | `shared_utils.py` | 1.2.0 | Utility functions |
 
 ---
