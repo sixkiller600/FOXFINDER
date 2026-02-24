@@ -515,7 +515,7 @@ from foxfinder import (
     SEEN_MAX_AGE_DAYS,
 )
 
-test("foxfinder VERSION", FF_VERSION == "4.14.0")
+test("foxfinder VERSION", FF_VERSION == "4.15.0")
 test("SEARCH_RESULTS_LIMIT = 150", SEARCH_RESULTS_LIMIT == 150)
 test("MAX_SEEN_ENTRIES = 50000", MAX_SEEN_ENTRIES == 50000)
 test("SEEN_MAX_AGE_DAYS = 14", SEEN_MAX_AGE_DAYS == 14)
@@ -640,6 +640,71 @@ test("title match case insensitive", title_matches_query("IPHONE 15 PRO", search
 # Empty query
 search_empty = {"query": ""}
 test("empty query matches anything", title_matches_query("Whatever Title", search_empty) is True)
+
+# --- Smart Matching: flexible_sizes ---
+search_flex = {"query": "two24 boots 12", "flexible_sizes": True}
+test("flex size: 12D matches 12", title_matches_query("Two24 Boots 12D", search_flex) is True)
+test("flex size: 12W matches 12", title_matches_query("Two24 Boots 12W", search_flex) is True)
+test("flex size: 12EEE matches 12", title_matches_query("Two24 Boots 12EEE", search_flex) is True)
+test("flex size: exact 12 still matches", title_matches_query("Two24 Boots 12", search_flex) is True)
+test("flex size: 13 does NOT match 12", title_matches_query("Two24 Boots 13", search_flex) is False)
+
+search_noflex = {"query": "two24 boots 12"}
+test("no flex: 12D does NOT match 12", title_matches_query("Two24 Boots 12D", search_noflex) is False)
+test("no flex: exact 12 matches", title_matches_query("Two24 Boots 12", search_noflex) is True)
+
+# --- Smart Matching: size_match ---
+search_sm = {"query": "Allen Edmonds Chester 12", "size_match": ["12"]}
+test("size_match: 12D matches", title_matches_query("Allen Edmonds Chester 12D", search_sm) is True)
+test("size_match: 12EE matches", title_matches_query("Allen Edmonds Chester 12EE", search_sm) is True)
+test("size_match: 13D does NOT match", title_matches_query("Allen Edmonds Chester 13D", search_sm) is False)
+
+# size_match implicitly requires the number
+search_sm_impl = {"query": "two24 boots", "size_match": ["12"]}
+test("size_match implicit: 12D matches", title_matches_query("Two24 Boots 12D", search_sm_impl) is True)
+test("size_match implicit: no 12 fails", title_matches_query("Two24 Boots 10", search_sm_impl) is False)
+
+# --- Smart Matching: required_any (OR logic) ---
+search_or = {"query": "Lenovo Thinkpad P1", "required_any": ["Gen 5", "Gen 6"]}
+test("required_any: Gen 5 matches", title_matches_query("Lenovo Thinkpad P1 Gen 5 i7", search_or) is True)
+test("required_any: Gen 6 matches", title_matches_query("Lenovo Thinkpad P1 Gen 6 i9", search_or) is True)
+test("required_any: Gen 4 fails", title_matches_query("Lenovo Thinkpad P1 Gen 4 i7", search_or) is False)
+
+search_or_empty = {"query": "test item", "required_any": []}
+test("required_any empty: no block", title_matches_query("Test Item Here", search_or_empty) is True)
+
+# --- Smart Matching: fuzzy_model ---
+search_fz = {"query": "ASUS RT-BE86U", "fuzzy_model": True}
+test("fuzzy: no hyphen matches", title_matches_query("ASUS RTBE86U Router", search_fz) is True)
+test("fuzzy: with hyphen matches", title_matches_query("ASUS RT-BE86U Router", search_fz) is True)
+test("fuzzy: space instead of hyphen", title_matches_query("ASUS RT BE86U Router", search_fz) is True)
+
+search_fz2 = {"query": "Milwaukee 2562-20", "fuzzy_model": True}
+test("fuzzy: no separator matches", title_matches_query("Milwaukee 256220 Ratchet", search_fz2) is True)
+test("fuzzy: space separator", title_matches_query("Milwaukee 2562 20 Ratchet", search_fz2) is True)
+
+# --- Smart Matching: match_plural ---
+search_pl = {"query": "two24 boot", "match_plural": True}
+test("plural: boot matches boots", title_matches_query("Two24 Boots Size 12", search_pl) is True)
+
+search_pl2 = {"query": "two24 boots", "match_plural": True}
+test("plural: boots matches boot", title_matches_query("Two24 Boot Size 12", search_pl2) is True)
+
+search_nopl = {"query": "two24 boots"}
+test("no plural: boots != boot", title_matches_query("Two24 Boot Size 12", search_nopl) is False)
+
+# --- Combined: size_match + match_plural ---
+search_combo = {"query": "two24 boots", "size_match": ["12"], "match_plural": True}
+test("combo: plural + size flex", title_matches_query("Two24 Boot 12D", search_combo) is True)
+test("combo: exact plural + size flex", title_matches_query("Two24 Boots 12W", search_combo) is True)
+test("combo: wrong size", title_matches_query("Two24 Boot 13D", search_combo) is False)
+
+# --- Realistic scenario ---
+search_real = {"query": "two24 boots", "size_match": ["12"], "match_plural": True}
+test("real: boost != boot/boots", title_matches_query("two24 boost 12d", search_real) is False)
+test("real: singular + size variant", title_matches_query("two24 boot 12d", search_real) is True)
+test("real: plural + size variant", title_matches_query("two24 boots 12D", search_real) is True)
+test("real: uppercase + size variant", title_matches_query("TWO24 BOOTS SIZE 12 EE", search_real) is True)
 
 # parse_recipients
 test("parse single recipient", parse_recipients("test@example.com") == ["test@example.com"])
@@ -848,15 +913,15 @@ for sf in secret_files:
 section("Version Consistency")
 
 # Read versions from modules
-test("foxfinder.py version = 4.14.0", FF_VERSION == "4.14.0")
+test("foxfinder.py version = 4.15.0", FF_VERSION == "4.15.0")
 test("ebay_common.py version = 1.4.0", EC_VERSION == "1.4.0")
 test("email_templates.py version = 2.12.0", ET_VERSION == "2.12.0")
 test("shared_utils.py version = 1.2.0", SU_VERSION == "1.2.0")
 
 # Check CHANGELOG mentions these versions
 changelog = (repo_root / "CHANGELOG.md").read_text()
-test("CHANGELOG mentions foxfinder 4.14.0", "4.14.0" in changelog)
-test("CHANGELOG component table has foxfinder.py 4.14.0", "foxfinder.py" in changelog and "4.14.0" in changelog)
+test("CHANGELOG mentions foxfinder 4.15.0", "4.15.0" in changelog)
+test("CHANGELOG component table has foxfinder.py 4.15.0", "foxfinder.py" in changelog and "4.15.0" in changelog)
 test("CHANGELOG component table has ebay_common.py 1.4.0", "1.4.0" in changelog)
 test("CHANGELOG component table has email_templates.py 2.12.0", "2.12.0" in changelog)
 test("CHANGELOG component table has shared_utils.py 1.2.0", "1.2.0" in changelog)

@@ -44,12 +44,26 @@
             "min_price": 500,
             "max_price": 800,
             "exclude_words": ["broken", "parts", "repair"],
+            "exclude_contains": [],
             "required_words": ["256GB"],
+            "required_any": [],
+            "flexible_sizes": false,
+            "size_match": [],
+            "fuzzy_model": false,
+            "match_plural": false,
             "condition": "any",
             "include_auctions": false,
             "free_shipping_only": false,
             "enabled": true,
-            "_note": "include_auctions defaults to false (Buy It Now only) per eBay Growth Check requirements"
+            "_note": "include_auctions defaults to false (Buy It Now only) per eBay Growth Check requirements",
+            "_smart_matching_help": {
+                "flexible_sizes": "true = numbers in query match size variants (12 → 12D, 12W, 12EE)",
+                "size_match": "array of specific numbers for flexible matching, e.g. [\"12\", \"13\"]",
+                "fuzzy_model": "true = hyphens/spaces/dots ignored in model numbers (RT-BE86U = RTBE86U)",
+                "match_plural": "true = boot matches boots and vice versa",
+                "required_any": "OR logic - at least ONE phrase must appear, e.g. [\"Gen 5\", \"Gen 6\"]",
+                "exclude_contains": "substring exclusion (vs exclude_words which uses word boundaries)"
+            }
         }
     ]
 }

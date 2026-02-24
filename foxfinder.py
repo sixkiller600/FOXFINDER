@@ -19,8 +19,10 @@ Compliant with:
 For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.14.0"
+VERSION = "4.15.0"
 __version__ = VERSION
+# v4.15.0: Smart matching engine - flexible_sizes, size_match, required_any, fuzzy_model, match_plural,
+#          exclude_words word-boundary fix, filtered-seen re-evaluation
 # v4.14.0: Search URL buttons in email, 3-tier priority pacing, data freshness disclaimer
 # v4.13.0: DRY refactoring (_enrich_item, gmail_cleanup_sent), IMAP auto-detect, --dry-run mode
 # v4.12.1: Enhanced subscriber settings (search preferences, custom message, phone, language)
@@ -641,6 +643,20 @@ def validate_config(config: Dict[str, Any]) -> Tuple[bool, List[str]]:
             priority = search.get("priority", "normal")
             if priority not in ("high", "medium", "normal"):
                 errors.append(f"Search '{search.get('name', f'#{i+1}')}': invalid priority '{priority}' (must be high, medium, or normal)")
+            # Validate smart matching fields
+            sname = search.get('name', f'#{i+1}')
+            if "flexible_sizes" in search and not isinstance(search["flexible_sizes"], bool):
+                errors.append(f"Search '{sname}': flexible_sizes must be true/false")
+            if "size_match" in search and not isinstance(search["size_match"], list):
+                errors.append(f"Search '{sname}': size_match must be an array")
+            if "required_any" in search and not isinstance(search["required_any"], list):
+                errors.append(f"Search '{sname}': required_any must be an array")
+            if "fuzzy_model" in search and not isinstance(search["fuzzy_model"], bool):
+                errors.append(f"Search '{sname}': fuzzy_model must be true/false")
+            if "match_plural" in search and not isinstance(search["match_plural"], bool):
+                errors.append(f"Search '{sname}': match_plural must be true/false")
+            if "exclude_contains" in search and not isinstance(search["exclude_contains"], list):
+                errors.append(f"Search '{sname}': exclude_contains must be an array")
     return (len(errors) == 0, errors)
 
 
@@ -875,19 +891,117 @@ def validate_api_response(data: Any, expected_keys: List[str], context: str = ""
     return True
 
 
+def _is_numeric_token(word: str) -> bool:
+    """Check if word is a standalone number (e.g. '12', '10.5')."""
+    return bool(re.match(r'^\d+(?:\.\d+)?$', word))
+
+
+def _strip_plural(word: str) -> str:
+    """Strip trailing 's' for plural comparison. Returns singular form."""
+    if len(word) > 2 and word.endswith('s'):
+        return word[:-1]
+    return word
+
+
+def _word_matches_title(word: str, title_lower: str,
+                        size_match_set: set, flexible: bool, fuzzy: bool, plural: bool) -> bool:
+    """
+    Check if a single required word matches the title, respecting all matching modes.
+
+    Precedence:
+    1. fuzzy_model  — normalize hyphens/spaces, substring check
+    2. flexible_sizes / size_match — relaxed regex for numbers
+    3. match_plural — add singular/plural variant patterns
+    """
+    is_num = _is_numeric_token(word)
+
+    # --- Fuzzy model matching: strip hyphens/spaces/dots and do substring check ---
+    if fuzzy and not is_num:
+        norm_word = re.sub(r'[\-\s.]', '', word)
+        norm_title = re.sub(r'[\-\s.]', '', title_lower)
+        if norm_word in norm_title:
+            return True
+        if plural:
+            singular = _strip_plural(norm_word)
+            plural_form = norm_word + 's'
+            if singular in norm_title or plural_form in norm_title:
+                return True
+        return False
+
+    # --- Flexible size matching for numeric tokens ---
+    if is_num and (size_match_set and word in size_match_set):
+        pattern = r'\b' + re.escape(word) + r'(?:[.\-\s]?[a-zA-Z]{0,3})?\b'
+        return bool(re.search(pattern, title_lower, re.IGNORECASE))
+    elif is_num and flexible and not size_match_set:
+        pattern = r'\b' + re.escape(word) + r'(?:[.\-\s]?[a-zA-Z]{0,3})?\b'
+        return bool(re.search(pattern, title_lower, re.IGNORECASE))
+
+    # --- Standard word-boundary matching (with optional plural) ---
+    patterns = [r'\b' + re.escape(word) + r'\b']
+    if plural:
+        singular = _strip_plural(word)
+        plural_form = word + 's' if not word.endswith('s') else word
+        singular_form = singular
+        if plural_form != word:
+            patterns.append(r'\b' + re.escape(plural_form) + r'\b')
+        if singular_form != word:
+            patterns.append(r'\b' + re.escape(singular_form) + r'\b')
+
+    return any(re.search(p, title_lower) for p in patterns)
+
+
 def title_matches_query(title: str, search: Dict[str, Any]) -> bool:
+    """
+    Check if title matches search query requirements.
+
+    Supports: required_words, flexible_sizes, size_match, fuzzy_model,
+              match_plural, required_any.
+    """
     title_lower = title.lower()
+
+    # --- Build required words list (AND logic) ---
     if "required_words" in search and search["required_words"]:
         required = [w.lower() for w in search["required_words"]]
     else:
         query = search.get("query", "")
-        if not query: return True
+        if not query:
+            return True
         ignore = {"the", "a", "an", "and", "or", "in", "on", "at", "to", "for", "of", "with", "new", "used"}
         words = query.split()
         required = [w.lower() for w in words if (len(w) > 1 or w.isdigit()) and w.lower() not in ignore]
+
+    # --- Read matching options ---
+    flexible = search.get("flexible_sizes", False)
+    size_match_raw = search.get("size_match", [])
+    size_match_set = {str(s).lower() for s in size_match_raw} if size_match_raw else set()
+    fuzzy = search.get("fuzzy_model", False)
+    plural = search.get("match_plural", False)
+
+    # size_match values are implicitly required (with flexible matching)
+    if size_match_set:
+        required_set = {w for w in required}
+        for sm in size_match_set:
+            if sm not in required_set:
+                required.append(sm)
+
+    # --- AND check: ALL required words must match ---
     for word in required:
-        pattern = r'\b' + re.escape(word) + r'\b'
-        if not re.search(pattern, title_lower): return False
+        if not _word_matches_title(word, title_lower, size_match_set, flexible, fuzzy, plural):
+            return False
+
+    # --- OR check: at least ONE of required_any must match ---
+    required_any = search.get("required_any", [])
+    if required_any:
+        found_any = False
+        for phrase in required_any:
+            phrase_lower = phrase.lower()
+            pattern = r'\b' + re.escape(phrase_lower) + r'\b'
+            if re.search(pattern, title_lower):
+                found_any = True
+                break
+        if not found_any:
+            return False
+
     return True
 
 
@@ -1024,12 +1138,27 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
     min_p = search.get("min_price", 0)
     max_p = search.get("max_price", float("inf"))
     exclude = [w.lower() for w in search.get("exclude_words", [])]
+    exclude_contains = [w.lower() for w in search.get("exclude_contains", [])]
     # Reuse include_auctions_api from API filter logic (already computed above with backwards compat)
     # bin_only = True means filter out auction-only items in post-processing
     bin_only = not include_auctions_api
 
-    def make_seen_entry(price_val, title_val):
-        return {'timestamp': datetime.now().isoformat(), 'price': price_val, 'title': title_val}
+    def make_seen_entry(price_val, title_val, filtered=False):
+        entry = {'timestamp': datetime.now().isoformat(), 'price': price_val, 'title': title_val}
+        if filtered:
+            entry['filtered'] = True
+        return entry
+
+    def _check_exclude(title_text: str) -> bool:
+        """Check if title matches any exclude rules. Returns True if should be excluded."""
+        t = title_text.lower()
+        for w in exclude:
+            if re.search(r'\b' + re.escape(w) + r'\b', t):
+                return True
+        for w in exclude_contains:
+            if w in t:
+                return True
+        return False
 
     for item in items:
         item_id = item.get("itemId", "")
@@ -1061,35 +1190,41 @@ def check_search_api(token: str, search: Dict[str, Any], seen: Dict[str, Any], e
             except (ValueError, TypeError):
                 pass
         if item_id in seen:
-            # Check if price dropped into range (like eBay's Watchlist alerts)
             seen_entry = seen[item_id]
             old_price = None
             if isinstance(seen_entry, dict):
                 old_price = seen_entry.get('price')
-            if price is not None and old_price is not None and price < old_price:
-                effective_max = max_p * 1.15 if "BEST_OFFER" in item.get("buyingOptions", []) else max_p
-                was_out_of_range = old_price < min_p or old_price > effective_max
-                now_in_range = min_p <= price <= effective_max
-                if now_in_range and was_out_of_range:
-                    if any(w in title.lower() for w in exclude):
+            # Re-evaluate previously filtered items (filters may have changed)
+            was_filtered = isinstance(seen_entry, dict) and seen_entry.get('filtered', False)
+            if was_filtered and title and title_matches_query(title, search) and not _check_exclude(title):
+                # Item was previously filtered but now passes — treat as new
+                pass  # Fall through to new-listing logic below
+            else:
+                # Normal seen logic: check for price drops
+                if price is not None and old_price is not None and price < old_price:
+                    effective_max = max_p * 1.15 if "BEST_OFFER" in item.get("buyingOptions", []) else max_p
+                    was_out_of_range = old_price < min_p or old_price > effective_max
+                    now_in_range = min_p <= price <= effective_max
+                    if now_in_range and was_out_of_range:
+                        if _check_exclude(title):
+                            seen[item_id] = make_seen_entry(price, title, filtered=True)
+                            continue
+                        enriched = _enrich_item(item, name)
+                        enriched["old_price"] = old_price
+                        enriched["search_url"] = build_ebay_search_url(search)
+                        price_drops.append(enriched)
                         seen[item_id] = make_seen_entry(price, title)
-                        continue
-                    enriched = _enrich_item(item, name)
-                    enriched["old_price"] = old_price
-                    enriched["search_url"] = build_ebay_search_url(search)
-                    price_drops.append(enriched)
+                elif price is not None:
                     seen[item_id] = make_seen_entry(price, title)
-            elif price is not None:
-                seen[item_id] = make_seen_entry(price, title)
-            continue
+                continue
         if not title or len(title) < 5:
             seen[item_id] = make_seen_entry(price, title)
             continue
         if not title_matches_query(title, search):
-            seen[item_id] = make_seen_entry(price, title)
+            seen[item_id] = make_seen_entry(price, title, filtered=True)
             continue
-        if any(w in title.lower() for w in exclude):
-            seen[item_id] = make_seen_entry(price, title)
+        if _check_exclude(title):
+            seen[item_id] = make_seen_entry(price, title, filtered=True)
             continue
         buying_options = item.get("buyingOptions", [])
         has_best_offer = "BEST_OFFER" in buying_options

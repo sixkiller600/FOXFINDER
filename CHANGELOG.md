@@ -6,6 +6,39 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.15.0] - 2026-02-25
+
+### Added — Smart Matching Engine
+- **`flexible_sizes`** — Numbers in query auto-match with letter suffixes (12 → 12D, 12W, 12EE, 12.5)
+- **`size_match`** — Explicit array of numbers for flexible matching; values are implicitly required
+- **`fuzzy_model`** — Strips hyphens/spaces/dots for model comparison (RT-BE86U = RTBE86U)
+- **`match_plural`** — Singular ↔ plural matching (boot = boots)
+- **`required_any`** — OR logic: at least ONE phrase must appear (e.g. ["Gen 5", "Gen 6"])
+- **`exclude_contains`** — New substring exclusion field (vs `exclude_words` word-boundary matching)
+
+### Fixed
+- **exclude_words word-boundary bug** — "20" in exclude no longer falsely kills "2024" in title.
+  Now uses `\b` word-boundary regex instead of substring matching.
+- **Filtered-seen re-evaluation** — Items rejected by filters are marked with `filtered: true` in seen.json.
+  When filters change, these items are re-evaluated instead of being permanently skipped.
+
+### Changed
+- `title_matches_query()` — Complete rewrite with helper functions (`_is_numeric_token`,
+  `_strip_plural`, `_word_matches_title`) supporting all 5 matching modes
+- `check_search_api()` — Uses `_check_exclude()` helper with word-boundary regex,
+  `exclude_contains` support, and `filtered` flag on rejected seen entries
+- `validate_config()` — Validates all new smart matching fields
+- `ebay_config_template.json` — Includes all new fields with inline help
+
+### Compliance Note
+All smart matching is **client-side post-processing only**. Zero changes to eBay API calls,
+query parameters, or affiliate link handling. Fully compatible with eBay Growth Check requirements.
+
+### Version Bumps
+- foxfinder.py: 4.14.0 → 4.15.0
+
+---
+
 ## [4.14.0] - 2026-02-07
 
 ### Added
