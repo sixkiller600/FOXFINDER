@@ -386,7 +386,7 @@ query parameters, or affiliate link handling. Fully compatible with eBay Growth 
 
 | Component | Version | Description |
 |-----------|---------|-------------|
-| `foxfinder.py` | 4.14.0 | Main application |
+| `foxfinder.py` | 4.15.0 | Main application |
 | `subscriber_manager.py` | 1.1.1 | Subscriber lifecycle management |
 | `email_templates.py` | 2.12.0 | Email templates |
 | `ebay_common.py` | 1.4.0 | Shared utilities |
