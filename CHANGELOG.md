@@ -6,6 +6,13 @@ This project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0.htm
 
 ---
 
+## [4.15.1] - 2026-03-10
+
+### Fixed
+- **Flexible size regex now handles jeans WxL format** — Sizes like "34x32", "34X30", "34/32" were invisible to the flexible size matcher because `\b` (word boundary) doesn't fire between a digit and `x` (both `\w`). Extended the regex pattern to optionally match `[xX/]\d+` after the base size number.
+
+---
+
 ## [4.15.0] - 2026-02-25
 
 ### Added — Smart Matching Engine

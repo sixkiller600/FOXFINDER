@@ -19,8 +19,9 @@ Compliant with:
 For more information, see README.md, PRIVACY_POLICY.md, and COMPLIANCE_CHECKLIST.md
 """
 
-VERSION = "4.15.0"
+VERSION = "4.15.1"
 __version__ = VERSION
+# v4.15.1: Fix flexible size regex for jeans WxL format (34x32, 34X30, 34/32)
 # v4.15.0: Smart matching engine - flexible_sizes, size_match, required_any, fuzzy_model, match_plural,
 #          exclude_words word-boundary fix, filtered-seen re-evaluation
 # v4.14.0: Search URL buttons in email, 3-tier priority pacing, data freshness disclaimer
@@ -930,10 +931,10 @@ def _word_matches_title(word: str, title_lower: str,
 
     # --- Flexible size matching for numeric tokens ---
     if is_num and (size_match_set and word in size_match_set):
-        pattern = r'\b' + re.escape(word) + r'(?:[.\-\s]?[a-zA-Z]{0,3})?\b'
+        pattern = r'(?:(?<=EU)|(?<=US)|(?<=UK)|\b)' + re.escape(word) + r'(?:[.\-\s]?[a-zA-Z]{0,3}|[xX/]\d+)?\b'
         return bool(re.search(pattern, title_lower, re.IGNORECASE))
     elif is_num and flexible and not size_match_set:
-        pattern = r'\b' + re.escape(word) + r'(?:[.\-\s]?[a-zA-Z]{0,3})?\b'
+        pattern = r'(?:(?<=EU)|(?<=US)|(?<=UK)|\b)' + re.escape(word) + r'(?:[.\-\s]?[a-zA-Z]{0,3}|[xX/]\d+)?\b'
         return bool(re.search(pattern, title_lower, re.IGNORECASE))
 
     # --- Standard word-boundary matching (with optional plural) ---
